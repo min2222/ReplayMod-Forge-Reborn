@@ -17,6 +17,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 import com.mojang.math.Quaternion;
 import com.replaymod.core.MinecraftMethodAccessor;
+import com.replaymod.gui.MinecraftGuiRenderer;
 import com.replaymod.mixin.MainWindowAccessor;
 import com.replaymod.mixin.ParticleAccessor;
 import com.replaymod.replaystudio.lib.viaversion.api.protocol.packet.State;
@@ -37,6 +38,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
@@ -68,13 +70,17 @@ public class MCVer {
         mc.gameRenderer.resize(width, height);
     }
     
+    public static void bindTexture(ResourceLocation id) {
+        new MinecraftGuiRenderer(null).bindTexture(id);
+    }
+    
     public static void emitLine(BufferBuilder buffer, Vector2f p1, Vector2f p2, int color) {
         emitLine(buffer, new Vector3f(p1.x, p1.y, 0.0F), new Vector3f(p2.x, p2.y, 0.0F), color);
-      }
+    }
       
-      public static void emitLine(BufferBuilder buffer, Vector3f p1, Vector3f p2, int color) {
-        int r = color >> 24 & 0xFF;
-        int g = color >> 16 & 0xFF;
+    public static void emitLine(BufferBuilder buffer, Vector3f p1, Vector3f p2, int color) {
+    	int r = color >> 24 & 0xFF;
+    	int g = color >> 16 & 0xFF;
         int b = color >> 8 & 0xFF;
         int a = color & 0xFF;
         Vector3f n = Vector3f.sub(p2, p1, null);
@@ -90,8 +96,8 @@ public class MCVer {
           .normal(n.x, n.y, n.z)
           
           .endVertex();
-      }
-    
+    }
+      
     public static Quaternion quaternion(float angle, com.mojang.math.Vector3f axis) {
         return new Quaternion(axis, angle, true);
     }

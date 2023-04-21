@@ -14,6 +14,8 @@ import com.replaymod.gui.layout.VerticalLayout;
 import com.replaymod.replaystudio.data.ModInfo;
 import com.replaymod.replaystudio.util.I18n;
 
+import net.minecraft.network.chat.Component;
+
 public class GuiModCompatWarning extends AbstractGuiScreen<GuiModCompatWarning> {
     public final GuiVerticalList content = new GuiVerticalList(this).setDrawShadow(true).setDrawSlider(true);
     public final GuiButton loadButton = new GuiButton().setI18nLabel("replaymod.gui.load").setSize(200, 20);
@@ -53,7 +55,8 @@ public class GuiModCompatWarning extends AbstractGuiScreen<GuiModCompatWarning> 
                         GuiPanel.builder().layout(new HorizontalLayout().setSpacing(3))
                                 .with(new GuiLabel().setI18nText("replaymod.gui.modwarning.id"), null)
                                 .with(new GuiLabel().setText(modInfo.getId()), null).build(),
-                        new GuiLabel().setText(I18n.format("replaymod.gui.modwarning.version.expected")
+                                //TODO
+                        new GuiLabel().setText(Component.translatable("replaymod.gui.modwarning.version.expected")
                                 + ": " + modInfo.getVersion())
                 ));
             }

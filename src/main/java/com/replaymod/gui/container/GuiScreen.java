@@ -27,7 +27,6 @@ package com.replaymod.gui.container;
 import net.minecraft.client.gui.screens.Screen;
 
 public class GuiScreen extends com.replaymod.gui.container.AbstractGuiScreen<GuiScreen> {
-    @SuppressWarnings("unchecked")
     public static com.replaymod.gui.container.AbstractGuiScreen from(Screen minecraft) {
         if (!(minecraft instanceof com.replaymod.gui.container.AbstractGuiScreen.MinecraftGuiScreen)) {
             return null;
