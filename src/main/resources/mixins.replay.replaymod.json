@@ -1,0 +1,30 @@
+{
+  "required": true,
+  "package": "com.replaymod.replay.mixin",
+  "plugin": "com.replaymod.core.ReplayModMixinConfigPlugin",
+  "mixins": [],
+  "server": [],
+  "client": [
+        "Mixin_MoveRealmsButton",
+            "MixinCamera",
+    "MixinInGameHud",
+        "com.replaymod.mixin.Mixin_EntityLivingBaseAccessor",
+        "Mixin_ShowSpectatedHand_NoOF",
+    "Mixin_ShowSpectatedHand_OF",
+                "EntityPlayerAccessor",
+    "FirstPersonRendererAccessor",
+        "com.replaymod.mixin.Mixin_ParticleManager",
+            "MixinGuiSpectator",
+    "MixinRenderArrow",
+                "MixinViewFrustum",
+                    "com.replaymod.mixin.Mixin_KeyboardListener",
+    "com.replaymod.mixin.Mixin_PlayerControllerMP",
+    "com.replaymod.mixin.Mixin_RenderItem",
+    "com.replaymod.mixin.Mixin_RenderLivingBase",
+    "MixinTileEntityEndPortalRenderer",
+    "MixinWorldClient"
+  ],
+  "compatibilityLevel": "JAVA_17",
+  "minVersion": "0.6.11",
+  "refmap": "mixins.replaymod.refmap.json"
+}

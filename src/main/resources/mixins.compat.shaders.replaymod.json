@@ -1,0 +1,15 @@
+{
+  "required": false,
+  "package": "com.replaymod.compat.shaders.mixin",
+  "mixins": [],
+  "server": [],
+  "client": [
+        "MixinChunkVisibility",
+            "MixinShaderEntityRenderer",
+    "MixinShaderRenderChunk",
+                "MixinShadersRender"
+  ],
+  "compatibilityLevel": "JAVA_17",
+  "minVersion": "0.6.11",
+  "refmap": "mixins.replaymod.refmap.json"
+}
