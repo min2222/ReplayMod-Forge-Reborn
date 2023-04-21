@@ -397,6 +397,10 @@ public class ReplayHandler {
     }
 
     public void doJump(int targetTime, boolean retainCameraPosition) {
+        if (!getReplaySender().isAsyncMode()) {
+            return; // path playback, rendering, etc. -> no jumping allowed
+        }
+
         if (getReplaySender() == quickReplaySender) {
             // Always round to full tick
             targetTime = targetTime + targetTime % 50;
@@ -406,7 +410,6 @@ public class ReplayHandler {
                 quickReplaySender.sendPacketsTill(targetTime - 50);
             }
 
-            // Update all entity positions (especially prev/lastTick values)
             for (Entity entity : mc.level.entitiesForRendering()) {
                 skipTeleportInterpolation(entity);
                 entity.xOld = entity.xo = entity.getX();
@@ -415,11 +418,7 @@ public class ReplayHandler {
                 entity.yRotO = entity.getYRot();
                 entity.xRotO = entity.getXRot();
             }
-
-            // Run previous tick
             mc.tick();
-
-            // Jump to target tick
             quickReplaySender.sendPacketsTill(targetTime);
 
             // Immediately apply player teleport interpolation
@@ -456,43 +455,51 @@ public class ReplayHandler {
                 // Render our please-wait-screen
                 GuiScreen guiScreen = new GuiScreen();
                 guiScreen.setBackground(AbstractGuiScreen.Background.DIRT);
+                guiScreen.setLayout(new HorizontalLayout(HorizontalLayout.Alignment.CENTER));
                 guiScreen.addElements(new HorizontalLayout.Data(0.5),
                         new GuiLabel().setI18nText("replaymod.gui.pleasewait"));
 
-                // Make sure that the replaysender changes into sync mode
                 replaySender.setSyncModeAndWait();
-
-                // Perform the rendering using OpenGL
                 PoseStack stack = RenderSystem.getModelViewStack();
+                
                 stack.pushPose();
-                RenderSystem.clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT, true);
-                RenderSystem.enableTexture();
+                RenderSystem.clear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT
+      
+                        , true
+                );
                 mc.getMainRenderTarget().bindWrite(true);
                 Window window = mc.getWindow();
                 RenderSystem.clear(256, Minecraft.ON_OSX);
-                stack.setIdentity();
-                RenderSystem.setProjectionMatrix(Matrix4f.orthographic(0.0F, 
-                        
-                        (float)(window.getWidth() / window.getGuiScale()), 0.0F, 
-                        
-                        (float)(window.getHeight() / window.getGuiScale()), 1000.0F, 3000.0F));
+             
+                RenderSystem.setProjectionMatrix(Matrix4f.orthographic(0.0F, (float)(window.getWidth() / window.getGuiScale()), 0.0F, (float)(window.getHeight() / window.getGuiScale()), 1000.0F, 3000.0F));
+                PoseStack matrixStack = RenderSystem.getModelViewStack();
+                matrixStack.setIdentity();
+                matrixStack.translate(0, 0, -2000);
                 RenderSystem.applyModelViewMatrix();
-                stack.setIdentity();
-                stack.translate(0, 0, -2000);
+                //TODO
+                //DiffuseLighting.enableGuiDepthLighting();
+                //RenderSystem.matrixMode(GL11.GL_PROJECTION);
+                matrixStack.setIdentity();
+                RenderSystem.setProjectionMatrix(Matrix4f.orthographic(0.0F, (float)(window.getWidth() / window.getGuiScale()), 0.0F, (float)(window.getHeight() / window.getGuiScale()), 1000.0F, 3000.0F));
+                RenderSystem.applyModelViewMatrix();
+                matrixStack.setIdentity();
+                matrixStack.translate(0, 0, -2000);
+                //TODO
+                //window.method_4493(true);
 
                 guiScreen.toMinecraft().init(mc, window.getGuiScaledWidth(), window.getGuiScaledHeight());
+
                 guiScreen.toMinecraft().render(new PoseStack(), 0, 0, 0);
-                guiScreen.toMinecraft().onClose();
+
+                guiScreen.toMinecraft().removed();
 
                 mc.getMainRenderTarget().unbindWrite();
-                stack.popPose();
-                stack.pushPose();
+                matrixStack.popPose();
+                matrixStack.pushPose();
                 mc.getMainRenderTarget().blitToScreen(mc.getWindow().getWidth(), mc.getWindow().getHeight());
-                stack.popPose();
+                matrixStack.popPose();
 
                 mc.getWindow().updateDisplay();
-
-                // Send the packets
                 do {
                     replaySender.sendPacketsTill(targetTime);
                     targetTime += 500;
@@ -500,10 +507,14 @@ public class ReplayHandler {
                 replaySender.setAsyncMode(true);
                 replaySender.setReplaySpeed(0);
 
-                mc.getConnection().getConnection()
-                .tick();
+                mc.getConnection().getConnection().tick();
+                
+                if (mc.level == null) {
+                    return;
+                }
+
                 for (Entity entity : mc.level.entitiesForRendering()) {
-                	skipTeleportInterpolation(entity);
+                    skipTeleportInterpolation(entity);
                 	entity.xOld = entity.xo = entity.getX();
                 	entity.yOld = entity.yo = entity.getY();
                 	entity.zOld = entity.zo = entity.getZ();
@@ -511,12 +522,7 @@ public class ReplayHandler {
                 	entity.xRotO = entity.getXRot();
                 }
                 mc.tick();
-
-                //finally, updating the camera's position (which is not done by the sync jumping)
                 moveCameraToTargetPosition();
-
-                // No need to remove our please-wait-screen. It'll vanish with the next
-                // render pass as it's never been a real GuiScreen in the first place.
             }
         }
     }

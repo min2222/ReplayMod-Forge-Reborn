@@ -14,6 +14,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -22,6 +25,7 @@ import com.github.steveice10.packetlib.io.NetOutput;
 import com.github.steveice10.packetlib.tcp.io.ByteBufNetOutput;
 import com.google.common.base.Preconditions;
 import com.google.common.io.Files;
+import com.replaymod.core.MinecraftMethodAccessor;
 import com.replaymod.core.ReplayMod;
 import com.replaymod.core.utils.Restrictions;
 import com.replaymod.core.utils.WrappedTimer;
@@ -310,6 +314,7 @@ public class FullReplaySender extends ChannelDuplexHandler implements ReplaySend
             return;
         }
         terminate = true;
+        syncSender.shutdown();
         events.unregister();
         try {
             channelInactive(ctx);
@@ -839,9 +844,48 @@ public class FullReplaySender extends ChannelDuplexHandler implements ReplaySend
      *
      * @param timestamp The timestamp in milliseconds since the beginning of this replay
      */
+    private final ExecutorService syncSender = Executors.newSingleThreadExecutor(runnable ->
+    new Thread(runnable, "replaymod-sync-sender"));
+    
     @Override
     public void sendPacketsTill(int timestamp) {
         Preconditions.checkState(!asyncMode, "This method cannot be used in async mode. Use jumpToTime(int) instead.");
+
+        // Submit our target to the sender thread and track its progress
+        AtomicBoolean doneSending = new AtomicBoolean();
+        syncSender.submit(() -> {
+            try {
+                doSendPacketsTill(timestamp);
+            } finally {
+                doneSending.set(true);
+            }
+        });
+
+        // Drain the task queue while we are sending (in case a mod blocks the io thread waiting for the main thread)
+        while (!doneSending.get()) {
+            executeTaskQueue();
+
+            // Wait until the sender thread has made progress
+            try {
+                //noinspection BusyWait
+                Thread.sleep(0, 100_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+
+        // Everything has been sent, drain the queue one last time
+        executeTaskQueue();
+    }
+    
+    private void executeTaskQueue() 
+    {
+        ((MinecraftMethodAccessor) mc).replayModExecuteTaskQueue();
+        ReplayMod.instance.runTasks();
+    }
+    
+    private void doSendPacketsTill(int timestamp) {
         try {
             while (ctx == null && !terminate) { // Make sure channel is ready
                 Thread.sleep(10);
@@ -861,7 +905,7 @@ public class FullReplaySender extends ChannelDuplexHandler implements ReplaySend
                     loginPhase = true;
                     startFromBeginning = false;
                     nextPacket = null;
-                    replayHandler.restartedReplay();
+                    ReplayMod.instance.runSync(replayHandler::restartedReplay);
                 }
 
                 if (replayIn == null) {
