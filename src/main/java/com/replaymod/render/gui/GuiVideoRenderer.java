@@ -242,6 +242,7 @@ public class GuiVideoRenderer extends GuiScreen implements Tickable {
     }
 
     private void renderNoPreview(GuiRenderer guiRenderer, ReadableDimension size) {
+    	//TODO texture is not working properly
         guiRenderer.bindTexture(NO_PREVIEW_TEXTURE);
         renderPreviewTexture(guiRenderer, size, 1280, 720);
     }

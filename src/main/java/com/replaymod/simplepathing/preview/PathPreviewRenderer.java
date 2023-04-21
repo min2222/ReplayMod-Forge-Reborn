@@ -216,6 +216,7 @@ public class PathPreviewRenderer extends EventRegistrations {
         RenderSystem.lineWidth(3.0F);
         tessellator.end();
         RenderSystem.enableCull();
+        //TODO path rendering is broken
     }
 
     private void drawPoint(Vector3f view,
@@ -318,7 +319,8 @@ public class PathPreviewRenderer extends EventRegistrations {
         buffer.vertex(r, r + cubeSize, r + cubeSize).uv(8 / 64f, 8 / 64f).color(255, 255, 255, 200).endVertex();
         buffer.vertex(r + cubeSize, r + cubeSize, r + cubeSize).uv(2 * 8 / 64f, 8 / 64f).color(255, 255, 255, 200).endVertex();
         buffer.vertex(r + cubeSize, r + cubeSize, r).uv(2 * 8 / 64f, 0).color(255, 255, 255, 200).endVertex();
-
+        RenderSystem.applyModelViewMatrix();
+        RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
         tessellator.end();
 
         RenderSystem.getModelViewStack().popPose();
