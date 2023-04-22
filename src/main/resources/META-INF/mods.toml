@@ -5,7 +5,7 @@ showAsResourcePack=false
 license="GPLv3"
 [[mods]]
   modId="replaymod"
-  version="1.0.0"
+  version="1.0.2"
   displayName="Replay Mod"
   updateJSONURL=""
   displayURL="https://replaymod.com"
