@@ -1,24 +1,13 @@
 package com.replaymod.mixin;
 
-import java.util.List;
-
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import net.minecraft.network.Connection;
-import net.minecraft.network.chat.Component;
 import net.minecraftforge.network.HandshakeHandler;
-import net.minecraftforge.network.NetworkDirection;
-import net.minecraftforge.network.NetworkRegistry;
 
 @Mixin(HandshakeHandler.class)
 public abstract class MixinFMLHandshakeHandler {
-    @Shadow
+	//TODO unable to join old worlds
+    /*@Shadow
     private List<NetworkRegistry.LoginPayload> messageList;
 
     @Shadow
@@ -36,5 +25,5 @@ public abstract class MixinFMLHandshakeHandler {
 
     @Redirect(method = "handleRegistryLoading", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/Connection;disconnect(Lnet/minecraft/network/chat/Component;)V"))
     public void replayMod_ignoreHandshakeConnectionClose(Connection networkManager, Component message) {
-    }
+    }*/
 }
