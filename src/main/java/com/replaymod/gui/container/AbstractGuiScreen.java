@@ -279,7 +279,7 @@ public abstract class AbstractGuiScreen<T extends AbstractGuiScreen<T>> extends 
         }
 
         @Override
-        public void onClose() {
+        public void removed() {
             invokeAll(com.replaymod.gui.function.Closeable.class, com.replaymod.gui.function.Closeable::close);
             active = false;
             if (enabledRepeatedKeyEvents) {

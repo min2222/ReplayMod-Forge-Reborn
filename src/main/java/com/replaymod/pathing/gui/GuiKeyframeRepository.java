@@ -188,8 +188,7 @@ public class GuiKeyframeRepository extends GuiScreen implements Closeable, Typea
             } catch (Throwable t) {
                 t.printStackTrace();
                 CrashReport report = CrashReport.forThrowable(t, "Copying timeline(s)");
-                Utils.error(LOGGER, GuiKeyframeRepository.this, report, () -> {
-                });
+                Utils.error(LOGGER, GuiKeyframeRepository.this, report, () -> {});
             }
         }
     }).setSize(75, 20).setI18nLabel("replaymod.gui.copy").setDisabled();

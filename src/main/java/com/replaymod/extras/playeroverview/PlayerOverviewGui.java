@@ -4,7 +4,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-import com.replaymod.core.utils.Utils;
 import com.replaymod.gui.GuiRenderer;
 import com.replaymod.gui.RenderInfo;
 import com.replaymod.gui.container.GuiClickable;
@@ -25,6 +24,7 @@ import com.replaymod.replay.ReplayModReplay;
 
 import de.johni0702.minecraft.gui.utils.lwjgl.Dimension;
 import de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.player.Player;
@@ -43,13 +43,13 @@ public class PlayerOverviewGui extends GuiScreen implements Closeable {
     public final GuiCheckbox saveCheckbox = new GuiCheckbox(contentPanel)
             .setTooltip(new GuiTooltip().setI18nText("replaymod.gui.playeroverview.remembersettings.description"))
             .setI18nLabel("replaymod.gui.playeroverview.remembersettings");
-    public final GuiCheckbox checkAll = new GuiCheckbox(contentPanel) {
+    public final GuiCheckbox checkAll = new GuiCheckbox(contentPanel){
         @Override
         public void onClick() {
             playersScrollable.invokeAll(IGuiCheckbox.class, e -> e.setChecked(true));
         }
     }.setLabel("").setChecked(true).setTooltip(new GuiTooltip().setI18nText("replaymod.gui.playeroverview.showall"));
-    public final GuiCheckbox uncheckAll = new GuiCheckbox(contentPanel) {
+    public final GuiCheckbox uncheckAll = new GuiCheckbox(contentPanel){
         @Override
         public void onClick() {
             playersScrollable.invokeAll(IGuiCheckbox.class, e -> e.setChecked(false));
@@ -87,7 +87,8 @@ public class PlayerOverviewGui extends GuiScreen implements Closeable {
 
         Collections.sort(players, new PlayerComparator()); // Sort by name, spectators last
         for (final Player p : players) {
-            final ResourceLocation texture = Utils.getResourceLocationForPlayerUUID(p.getUUID());
+            if (!(p instanceof AbstractClientPlayer)) continue;
+            final ResourceLocation texture = ((AbstractClientPlayer) p).getSkinTextureLocation();
             final GuiClickable panel = new GuiClickable().setLayout(new HorizontalLayout().setSpacing(2)).addElements(
                     new HorizontalLayout.Data(0.5), new GuiImage() {
                         @Override

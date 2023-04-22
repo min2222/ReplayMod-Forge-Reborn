@@ -126,7 +126,7 @@ public class VanillaGuiScreen extends GuiScreen implements Draggable, Typeable, 
 
             if (active) {
                 active = false;
-                getSuperMcGui().onClose();
+                getSuperMcGui().removed();
                 WRAPPERS.remove(mcScreen, VanillaGuiScreen.this);
             }
         }
@@ -139,7 +139,7 @@ public class VanillaGuiScreen extends GuiScreen implements Draggable, Typeable, 
             if (screen == mcScreen && active) {
                 active = false;
                 unregister();
-                getSuperMcGui().onClose();
+                getSuperMcGui().removed();
                 WRAPPERS.remove(mcScreen, VanillaGuiScreen.this);
             }
         }

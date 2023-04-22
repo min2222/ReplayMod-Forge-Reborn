@@ -38,6 +38,7 @@ public class PlayerOverview extends EventRegistrations implements Extra {
             @Override
             public void run() {
                 if (module.getReplayHandler() != null) {
+                    //#if MC>=11400
                     List<Player> players = mod.getMinecraft().level.players()
                             .stream()
                             .map(it -> (Player) it)
@@ -73,10 +74,7 @@ public class PlayerOverview extends EventRegistrations implements Extra {
         }
     }
 
-    {
-        on(ReplayOpenedCallback.EVENT, this::onReplayOpen);
-    }
-
+    { on(ReplayOpenedCallback.EVENT, this::onReplayOpen); }
     private void onReplayOpen(ReplayHandler replayHandler) throws IOException {
         Optional<Set<UUID>> savedData = replayHandler.getReplayFile().getInvisiblePlayers();
         if (savedData.isPresent()) {
@@ -87,24 +85,16 @@ public class PlayerOverview extends EventRegistrations implements Extra {
         }
     }
 
-    {
-        on(ReplayClosedCallback.EVENT, this::onReplayClose);
-    }
-
+    { on(ReplayClosedCallback.EVENT, this::onReplayClose); }
     private void onReplayClose(ReplayHandler replayHandler) {
         hiddenPlayers.clear();
     }
 
-    {
-        on(PreRenderHandCallback.EVENT, this::shouldHideHand);
-    }
-
+    { on(PreRenderHandCallback.EVENT, this::shouldHideHand); }
     private boolean shouldHideHand() {
         Entity view = module.getCore().getMinecraft().getCameraEntity();
         return view != null && isHidden(view.getUUID());
     }
-
-    // See MixinRender for why this is 1.7.10 only
 
     public boolean isSavingEnabled() {
         return savingEnabled;

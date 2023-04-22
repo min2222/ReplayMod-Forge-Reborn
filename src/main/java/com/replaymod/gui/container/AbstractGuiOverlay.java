@@ -31,6 +31,8 @@ import com.replaymod.gui.MinecraftGuiRenderer;
 import com.replaymod.gui.OffsetGuiRenderer;
 import com.replaymod.gui.RenderInfo;
 import com.replaymod.gui.element.GuiElement;
+import com.replaymod.gui.function.Closeable;
+import com.replaymod.gui.function.Loadable;
 import com.replaymod.gui.function.Scrollable;
 import com.replaymod.gui.utils.EventRegistrations;
 import com.replaymod.gui.utils.MouseUtils;
@@ -66,10 +68,10 @@ public abstract class AbstractGuiOverlay<T extends AbstractGuiOverlay<T>> extend
     public void setVisible(boolean visible) {
         if (this.visible != visible) {
             if (visible) {
-                invokeAll(com.replaymod.gui.function.Loadable.class, com.replaymod.gui.function.Loadable::load);
+                invokeAll(Loadable.class, Loadable::load);
                 eventHandler.register();
             } else {
-                invokeAll(com.replaymod.gui.function.Closeable.class, com.replaymod.gui.function.Closeable::close);
+                invokeAll(Closeable.class, Closeable::close);
                 eventHandler.unregister();
             }
             updateUserInputGui();
