@@ -83,8 +83,7 @@
     "SPacketSpawnMobAccessor",
     "SPacketSpawnPlayerAccessor",
     "TimerAccessor",
-    "WorldRendererAccessor",
-    "MixinClientConnection"
+    "WorldRendererAccessor"
   ],
   "compatibilityLevel": "JAVA_17",
   "minVersion": "0.6.11",
