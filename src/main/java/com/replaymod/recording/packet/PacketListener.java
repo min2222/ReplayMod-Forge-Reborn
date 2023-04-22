@@ -169,10 +169,6 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
     }
 
     public void save(Packet packet) {
-        // If we're not on the main thread (i.e. we're on the netty thread), then we need to schedule the saving
-        // to happen on the main thread so we can guarantee correct ordering of inbound and inject packets.
-        // Otherwise, injected packets may end up further down the packet stream than they were supposed to and other
-        // inbound packets which may rely on the injected packet would behave incorrectly when played back.
         if (!mc.isSameThread()) {
             mc.tell(() -> save(packet));
             return;
@@ -182,12 +178,6 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
             if (packet.getRegistry().getState() == State.LOGIN && packet.getId() == PACKET_ID_LOGIN_COMPRESSION) {
                 return; // Replay data is never compressed on the packet level
             }
-            //#if MC<10904
-            //$$ if (packet.getRegistry().getState() == State.PLAY && packet.getId() == PACKET_ID_PLAY_COMPRESSION) {
-            //$$     return; // Replay data is never compressed on the packet level
-            //$$ }
-            //#endif
-            //#endif
 
             long now = System.currentTimeMillis();
             if (serverWasPaused) {
@@ -340,27 +330,7 @@ public class PacketListener extends ChannelInboundHandlerAdapter {
                 packet = decodePacket(connectionState, buf);
             }
         } else if (msg instanceof net.minecraft.network.protocol.Packet) {
-            // for integrated server connections MC is passing the packet objects directly, so we need to encode them
-            // ourselves to be able to store them
-            //#if MC>=11904
-            //$$ PacketBundleHandler bundleHandler = ctx.channel().attr(PacketBundleHandler.KEY).get().getBundler(NetworkSide.CLIENTBOUND);
-            //$$ List<Packet> packets = new ArrayList<>(1);
-            //$$ bundleHandler.forEachPacket((net.minecraft.network.packet.Packet<?>) msg, unbundledPacket -> {
-            //$$     try {
-            //$$         packets.add(encodeMcPacket(connectionState, unbundledPacket));
-            //$$     } catch (Exception e) {
-            //$$         throw new RuntimeException(e);
-            //$$     }
-            //$$ });
-            //$$ if (packets.size() > 1) {
-            //$$     packets.forEach(this::save);
-            //$$     super.channelRead(ctx, msg);
-            //$$     return;
-            //$$ }
-            //$$ packet = packets.isEmpty() ? null : packets.get(0);
-            //#else
             packet = encodeMcPacket(connectionState, (net.minecraft.network.protocol.Packet) msg);
-            //#endif
         }
 
         if (packet != null) {
