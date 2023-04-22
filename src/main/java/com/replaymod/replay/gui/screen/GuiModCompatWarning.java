@@ -73,9 +73,10 @@ public class GuiModCompatWarning extends AbstractGuiScreen<GuiModCompatWarning> 
                         GuiPanel.builder().layout(new HorizontalLayout().setSpacing(3))
                                 .with(new GuiLabel().setI18nText("replaymod.gui.modwarning.id"), null)
                                 .with(new GuiLabel().setText(entry.getKey().getId()), null).build(),
-                        new GuiLabel().setText(I18n.format("replaymod.gui.modwarning.version.expected")
+                                //TODO
+                        new GuiLabel().setText(Component.translatable("replaymod.gui.modwarning.version.expected")
                                 + ": " + entry.getKey().getVersion()
-                                + ", " + I18n.format("replaymod.gui.modwarning.version.found")
+                                + ", " + Component.translatable("replaymod.gui.modwarning.version.found")
                                 + ": " + entry.getValue())
                 ));
             }
