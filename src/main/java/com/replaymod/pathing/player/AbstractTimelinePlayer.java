@@ -52,13 +52,13 @@ public abstract class AbstractTimelinePlayer extends EventRegistrations {
 
         Iterator<Keyframe> iter = Iterables.concat(Iterables.transform(timeline.getPaths(),
                 new Function<Path, Iterable<Keyframe>>() {
-                    @Nullable
-                    @Override
-                    public Iterable<Keyframe> apply(@Nullable Path input) {
-                        assert input != null;
-                        return input.getKeyframes();
-                    }
-                })).iterator();
+            @Nullable
+            @Override
+            public Iterable<Keyframe> apply(@Nullable Path input) {
+                assert input != null;
+                return input.getKeyframes();
+            }
+        })).iterator();
         if (!iter.hasNext()) {
             lastTimestamp = 0;
         } else {
@@ -96,10 +96,7 @@ public abstract class AbstractTimelinePlayer extends EventRegistrations {
         return future != null && !future.isDone();
     }
 
-    {
-        on(ReplayTimer.UpdatedCallback.EVENT, this::onTick);
-    }
-
+    { on(ReplayTimer.UpdatedCallback.EVENT, this::onTick); }
     public void onTick() {
         if (future.isDone()) {
             MinecraftAccessor mcA = (MinecraftAccessor) mc;

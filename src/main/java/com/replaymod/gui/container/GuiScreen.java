@@ -26,9 +26,9 @@ package com.replaymod.gui.container;
 
 import net.minecraft.client.gui.screens.Screen;
 
-public class GuiScreen extends com.replaymod.gui.container.AbstractGuiScreen<GuiScreen> {
-    public static com.replaymod.gui.container.AbstractGuiScreen from(Screen minecraft) {
-        if (!(minecraft instanceof com.replaymod.gui.container.AbstractGuiScreen.MinecraftGuiScreen)) {
+public class GuiScreen extends AbstractGuiScreen<GuiScreen> {
+    public static AbstractGuiScreen from(Screen minecraft) {
+        if (!(minecraft instanceof AbstractGuiScreen.MinecraftGuiScreen)) {
             return null;
         }
         return ((AbstractGuiScreen.MinecraftGuiScreen) minecraft).getWrapper();

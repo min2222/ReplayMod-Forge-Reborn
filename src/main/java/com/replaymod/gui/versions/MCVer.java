@@ -14,6 +14,7 @@ import de.johni0702.minecraft.gui.utils.lwjgl.ReadableColor;
 import net.minecraft.CrashReportCategory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.network.chat.Component;
 import net.minecraftforge.client.event.ScreenEvent;
 
 /**
@@ -41,6 +42,11 @@ public class MCVer {
         vertexBuffer.vertex(left, bottom, 0).endVertex();
         vertexBuffer.vertex(right, bottom, 0).endVertex();
         tessellator.end();
+    }
+    
+    public static Component literalText(String str) 
+    {
+    	return Component.literal(str);
     }
 
     public static void drawRect(int x, int y, int width, int height, ReadableColor tl, ReadableColor tr, ReadableColor bl, ReadableColor br) {

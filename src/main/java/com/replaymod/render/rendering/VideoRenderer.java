@@ -172,7 +172,7 @@ public class VideoRenderer implements RenderInfo {
             if (videoStart > 1000) {
                 int replayTime = videoStart - 1000;
                 //#if MC>=11200
-                timer.tickDelta = 0;
+                timer.partialTick = 0;
                 ((TimerAccessor) timer).setTickLength(WrappedTimer.DEFAULT_MS_PER_TICK);
                 while (replayTime < videoStart) {
                     replayTime += 50;
@@ -239,11 +239,11 @@ public class VideoRenderer implements RenderInfo {
         guiWindow.unbind();
 
         if (cameraPathExporter != null) {
-            cameraPathExporter.recordFrame(timer.tickDelta);
+            cameraPathExporter.recordFrame(timer.partialTick);
         }
 
         framesDone++;
-        return timer.tickDelta;
+        return timer.partialTick;
     }
 
     @Override
