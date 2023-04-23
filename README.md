@@ -60,3 +60,6 @@ In the past, bugs were tracked via [Bugzilla](https://bugs.replaymod.com/), so b
 ## License
 The ReplayMod is provided under the terms of the GNU General Public License Version 3 or (at your option) any later version.
 See `LICENSE.md` for the full license text.
+
+## Original Project Link
+https://github.com/unhappychoice/ReplayMod
