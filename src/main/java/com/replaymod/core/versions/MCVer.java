@@ -12,6 +12,7 @@ import org.lwjgl.glfw.GLFW;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
@@ -76,6 +77,15 @@ public class MCVer {
     
     public static void emitLine(BufferBuilder buffer, Vector2f p1, Vector2f p2, int color) {
         emitLine(buffer, new Vector3f(p1.x, p1.y, 0.0F), new Vector3f(p2.x, p2.y, 0.0F), color);
+    }
+    
+    public static void pushMatrix() {
+    	RenderSystem.getModelViewStack().pushPose();
+    }
+    
+    public static void popMatrix() {
+    	RenderSystem.getModelViewStack().popPose();
+    	RenderSystem.applyModelViewMatrix();
     }
       
     public static void emitLine(BufferBuilder buffer, Vector3f p1, Vector3f p2, int color) {
