@@ -188,7 +188,7 @@ public abstract class AbstractGuiScreen<T extends AbstractGuiScreen<T>> extends 
         private boolean active;
 
         protected MinecraftGuiScreen() {
-            super(null);
+            super(Component.literal(""));
         }
 
         @Override
