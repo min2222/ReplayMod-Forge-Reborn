@@ -20,6 +20,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.replaymod.core.ReplayMod;
+import com.replaymod.core.utils.Result;
 import com.replaymod.core.utils.Utils;
 import com.replaymod.core.versions.MCVer.Keyboard;
 import com.replaymod.gui.GuiRenderer;
@@ -94,10 +95,9 @@ public class GuiPathing {
     public final GuiButton renderButton = new GuiButton().onClick(new Runnable() {
         @Override
         public void run() {
-            Timeline timeline = preparePathsForPlayback(false);
-            if (timeline == null) return;
+            abortPathPlayback();
             GuiScreen screen = GuiRenderSettings.createBaseScreen();
-            new GuiRenderQueue(screen, replayHandler, () -> preparePathsForPlayback(false)) {
+            new GuiRenderQueue(screen, replayHandler, () -> preparePathsForPlayback(false).okOrNull()) {
                 @Override
                 protected void close() {
                     super.close();
@@ -151,7 +151,7 @@ public class GuiPathing {
         }
     }.setSize(20, 20).setTexture(ReplayMod.TEXTURE, ReplayMod.TEXTURE_SIZE).setTooltip(new GuiTooltip());
 
-    public final GuiKeyframeTimeline timeline = new GuiKeyframeTimeline(this) {
+    public final GuiKeyframeTimeline timeline = new GuiKeyframeTimeline(this){
         @Override
         public void draw(GuiRenderer renderer, ReadableDimension size, RenderInfo renderInfo) {
             if (player.isActive()) {
@@ -162,16 +162,13 @@ public class GuiPathing {
     }.setSize(Integer.MAX_VALUE, 20).setMarkers();
 
     public final GuiHorizontalScrollbar scrollbar = new GuiHorizontalScrollbar().setSize(Integer.MAX_VALUE, 9);
-
-    {
-        scrollbar.onValueChanged(new Runnable() {
-            @Override
-            public void run() {
-                timeline.setOffset((int) (scrollbar.getPosition() * timeline.getLength()));
-                timeline.setZoom(scrollbar.getZoom());
-            }
-        }).setZoom(0.1);
-    }
+    {scrollbar.onValueChanged(new Runnable() {
+        @Override
+        public void run() {
+            timeline.setOffset((int) (scrollbar.getPosition() * timeline.getLength()));
+            timeline.setZoom(scrollbar.getZoom());
+        }
+    }).setZoom(0.1);}
 
     public final GuiTimelineTime<GuiKeyframeTimeline> timelineTime = new GuiTimelineTime<GuiKeyframeTimeline>()
             .setTimeline(timeline);
@@ -259,14 +256,17 @@ public class GuiPathing {
                 } else {
                     boolean ignoreTimeKeyframes = Keyboard.isKeyDown(Keyboard.KEY_LSHIFT);
 
-                    Timeline timeline = preparePathsForPlayback(ignoreTimeKeyframes);
+                    Timeline timeline = preparePathsForPlayback(ignoreTimeKeyframes).okOrElse(err -> {
+                        GuiInfoPopup.open(overlay, err);
+                        return null;
+                    });
                     if (timeline == null) return;
 
                     Path timePath = new SPTimeline(timeline).getTimePath();
                     timePath.setActive(!ignoreTimeKeyframes);
 
                     // Start from cursor time unless the control key is pressed (then start from beginning)
-                    int startTime = Keyboard.isKeyDown(Keyboard.KEY_LCONTROL) ? 0 : GuiPathing.this.timeline.getCursorPosition();
+                    int startTime = Keyboard.isKeyDown(Keyboard.KEY_LCONTROL)? 0 : GuiPathing.this.timeline.getCursorPosition();
                     ListenableFuture<Void> future = player.start(timeline, startTime);
                     overlay.setCloseable(false);
                     overlay.setMouseVisible(true);
@@ -372,10 +372,27 @@ public class GuiPathing {
         startLoadingEntityTracker();
     }
 
+    private void abortPathPlayback() {
+        if (!player.isActive()) {
+            return;
+        }
+
+        ListenableFuture<Void> future = player.getFuture();
+        if (!future.isDone() && !future.isCancelled()) {
+            future.cancel(false);
+        }
+        // Tear down of the player might only happen the next tick after it was cancelled
+        player.onTick();
+    }
+
     public void keyframeRepoButtonPressed() {
+        abortPathPlayback();
         try {
+            TimelineSerialization serialization = new TimelineSerialization(mod.getCurrentTimeline(), null);
+            String serialized = serialization.serialize(Collections.singletonMap("", mod.getCurrentTimeline().getTimeline()));
+            Timeline currentTimeline = serialization.deserialize(serialized).get("");
             GuiKeyframeRepository gui = new GuiKeyframeRepository(
-                    mod.getCurrentTimeline(), replayHandler.getReplayFile(), mod.getCurrentTimeline().getTimeline());
+                    mod.getCurrentTimeline(), replayHandler.getReplayFile(), currentTimeline);
             Futures.addCallback(gui.getFuture(), new FutureCallback<Timeline>() {
                 @Override
                 public void onSuccess(Timeline result) {
@@ -410,7 +427,6 @@ public class GuiPathing {
 
     private int prevSpeed = -1;
     private int prevTime = -1;
-
     private void checkForAutoSync() {
         if (!mod.keySyncTime.isAutoActivating()) {
             prevSpeed = -1;
@@ -431,14 +447,14 @@ public class GuiPathing {
         prevTime = time;
     }
 
-    public void syncTimeButtonPressed() {
+    private Integer computeSyncTime(int cursor) {
         // Current replay time
         int time = replayHandler.getReplaySender().currentTimeStamp();
-        // Position of the cursor
-        int cursor = timeline.getCursorPosition();
         // Get the last time keyframe before the cursor
-        mod.getCurrentTimeline().getTimePath().getKeyframes().stream()
-                .filter(it -> it.getTime() <= cursor).reduce((__, last) -> last).ifPresent(keyframe -> {
+        Keyframe keyframe = mod.getCurrentTimeline().getTimePath().getKeyframes().stream()
+                .filter(it -> it.getTime() <= cursor).reduce((__, last) -> last)
+                .orElse(null);
+        if (keyframe != null) {
             // Cursor position at the keyframe
             int keyframeCursor = (int) keyframe.getTime();
             // Replay time at the keyframe
@@ -450,11 +466,49 @@ public class GuiPathing {
             double speed = Keyboard.isKeyDown(Keyboard.KEY_LSHIFT) ? 1 : replayHandler.getOverlay().getSpeedSliderValue();
             // Cursor time passed
             int cursorPassed = (int) (timePassed / speed);
-            // Move cursor to new position
-            timeline.setCursorPosition(keyframeCursor + cursorPassed).ensureCursorVisibleWithPadding();
-            // Deselect keyframe to allow the user to add a new one right away
-            mod.setSelected(null, 0);
-        });
+            // Return new position
+            return keyframeCursor + cursorPassed;
+        } else {
+            // No keyframes before cursor
+            return null;
+        }
+    }
+
+    public void syncTimeButtonPressed() {
+        // Position of the cursor
+        int cursor = timeline.getCursorPosition();
+
+        // Update cursor once
+        Integer updatedCursor = computeSyncTime(cursor);
+        if (updatedCursor == null) {
+            return; // no keyframes before cursor, nothing we can do
+        }
+        cursor = updatedCursor;
+
+        // Repeatedly update until we find a fix point
+        while (true) {
+            updatedCursor = computeSyncTime(cursor);
+            if (updatedCursor == null) {
+                // Cursor has gotten stuck before in front of all keyframes.
+                // Let's just use the last value we got, this shouldn't happen with ordinary timelines anyway.
+                break;
+            }
+            if (updatedCursor == cursor) {
+                // Found the fix point, we can stop now
+                break;
+            }
+            if (updatedCursor < cursor) {
+                // We've gone backwards, we'll likely get stuck in a loop, so abort the whole thing
+                return;
+            }
+            // Found a new position, take it, repeat
+            cursor = updatedCursor;
+        }
+
+        // Move cursor to new position
+        timeline.setCursorPosition(cursor).ensureCursorVisibleWithPadding();
+        // Deselect keyframe to allow the user to add a new one right away
+        mod.setSelected(null, 0);
     }
 
     public boolean deleteButtonPressed() {
@@ -494,11 +548,12 @@ public class GuiPathing {
         }).start();
     }
 
-    private Timeline preparePathsForPlayback(boolean ignoreTimeKeyframes) {
+    private Result<Timeline, String[]> preparePathsForPlayback(boolean ignoreTimeKeyframes) {
         SPTimeline spTimeline = mod.getCurrentTimeline();
 
-        if (!validatePathsForPlayback(spTimeline, ignoreTimeKeyframes)) {
-            return null;
+        String[] errors = validatePathsForPlayback(spTimeline, ignoreTimeKeyframes);
+        if (errors != null) {
+            return Result.err(errors);
         }
 
         try {
@@ -506,25 +561,23 @@ public class GuiPathing {
             String serialized = serialization.serialize(Collections.singletonMap("", spTimeline.getTimeline()));
             Timeline timeline = serialization.deserialize(serialized).get("");
             timeline.getPaths().forEach(Path::updateAll);
-            return timeline;
+            return Result.ok(timeline);
         } catch (Throwable t) {
-            error(LOGGER, replayHandler.getOverlay(), CrashReport.forThrowable(t, "Cloning timeline"), () -> {
-            });
-            return null;
+            error(LOGGER, replayHandler.getOverlay(), CrashReport.forThrowable(t, "Cloning timeline"), () -> {});
+            return Result.err(null);
         }
     }
 
-    private boolean validatePathsForPlayback(SPTimeline timeline, boolean ignoreTimeKeyframes) {
+    private String[] validatePathsForPlayback(SPTimeline timeline, boolean ignoreTimeKeyframes) {
         timeline.getTimeline().getPaths().forEach(Path::updateAll);
 
         // Make sure there are at least two position keyframes
         if (timeline.getPositionPath().getSegments().isEmpty()) {
-            GuiInfoPopup.open(replayHandler.getOverlay(), "replaymod.chat.morekeyframes");
-            return false;
+            return new String[]{ "replaymod.chat.morekeyframes" };
         }
 
         if (ignoreTimeKeyframes) {
-            return true;
+            return null;
         }
 
         // Make sure time keyframes's values are monotonically increasing
@@ -533,22 +586,21 @@ public class GuiPathing {
             int time = keyframe.getValue(TimestampProperty.PROPERTY).orElseThrow(IllegalStateException::new);
             if (time < lastTime) {
                 // We are going backwards in time
-                GuiInfoPopup.open(replayHandler.getOverlay(),
+                return new String[]{
                         "replaymod.error.negativetime1",
                         "replaymod.error.negativetime2",
-                        "replaymod.error.negativetime3");
-                return false;
+                        "replaymod.error.negativetime3"
+                };
             }
             lastTime = time;
         }
 
         // Make sure there are at least two time keyframes
         if (timeline.getTimePath().getSegments().isEmpty()) {
-            GuiInfoPopup.open(replayHandler.getOverlay(), "replaymod.chat.morekeyframes");
-            return false;
+            return new String[]{ "replaymod.chat.morekeyframes" };
         }
 
-        return true;
+        return null;
     }
 
     public void zoomTimeline(double factor) {
@@ -595,8 +647,7 @@ public class GuiPathing {
 
     /**
      * Called when either one of the property buttons is pressed.
-     *
-     * @param path           {@code TIME} for the time property button, {@code POSITION} for the place property button
+     * @param path {@code TIME} for the time property button, {@code POSITION} for the place property button
      * @param neverSpectator when true, will insert a position keyframe even when currently spectating an entity
      */
     public void toggleKeyframe(SPPath path, boolean neverSpectator) {

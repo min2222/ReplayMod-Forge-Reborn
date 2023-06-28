@@ -163,7 +163,7 @@ public class GuiRenderQueue extends AbstractGuiPopup<GuiRenderQueue> implements 
         updateButtons();
     }
 
-    private static void processQueue(AbstractGuiScreen<?> container, ReplayHandler replayHandler, Iterable<RenderJob> queue, Runnable done) {
+	private static void processQueue(AbstractGuiScreen<?> container, ReplayHandler replayHandler, Iterable<RenderJob> queue, Runnable done) {
         Minecraft mc = MCVer.getMinecraft();
 
         // Close all GUIs (so settings in GuiRenderSettings are saved)

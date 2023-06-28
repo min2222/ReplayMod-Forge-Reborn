@@ -28,21 +28,21 @@ import com.replaymod.gui.GuiRenderer;
 import com.replaymod.gui.RenderInfo;
 import com.replaymod.gui.container.GuiContainer;
 import com.replaymod.gui.versions.MCVer;
+
 import de.johni0702.minecraft.gui.utils.lwjgl.Dimension;
 import de.johni0702.minecraft.gui.utils.lwjgl.Point;
 import de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 
-public abstract class AbstractGuiElement<T extends AbstractGuiElement<T>> implements com.replaymod.gui.element.GuiElement<T> {
+public abstract class AbstractGuiElement<T extends AbstractGuiElement<T>> implements GuiElement<T> {
     protected static final ResourceLocation TEXTURE = new ResourceLocation("jgui", "gui.png");
-
 
     private final Minecraft minecraft = MCVer.getMinecraft();
 
     private GuiContainer container;
 
-    private com.replaymod.gui.element.GuiElement tooltip;
+    private GuiElement tooltip;
 
     private boolean enabled = true;
 
@@ -98,7 +98,7 @@ public abstract class AbstractGuiElement<T extends AbstractGuiElement<T>> implem
     }
 
     @Override
-    public com.replaymod.gui.element.GuiElement getTooltip(RenderInfo renderInfo) {
+    public GuiElement getTooltip(RenderInfo renderInfo) {
         if (tooltip != null && lastSize != null) {
             Point mouse = new Point(renderInfo.mouseX, renderInfo.mouseY);
             if (container != null) {
