@@ -231,10 +231,11 @@ public class PathPreviewRenderer extends EventRegistrations {
 		MCVer.pushMatrix();
 		Vector3f t = Vector3f.sub(pos, view, null);
 		RenderSystem.getModelViewStack().translate(t.x, t.y, t.z);
-		RenderSystem.getModelViewStack().mulPose(MCVer.quaternion(-(mc.getEntityRenderDispatcher()).camera.getYRot(),
-				new com.mojang.math.Vector3f(0.0F, 1.0F, 0.0F)));
-		RenderSystem.getModelViewStack().mulPose(MCVer.quaternion((mc.getEntityRenderDispatcher()).camera.getXRot(),
-				new com.mojang.math.Vector3f(1.0F, 0.0F, 0.0F)));
+		if(mc.getEntityRenderDispatcher().camera != null)
+		{
+			RenderSystem.getModelViewStack().mulPose(MCVer.quaternion(-(mc.getEntityRenderDispatcher()).camera.getYRot(), new com.mojang.math.Vector3f(0.0F, 1.0F, 0.0F)));
+			RenderSystem.getModelViewStack().mulPose(MCVer.quaternion((mc.getEntityRenderDispatcher()).camera.getXRot(), new com.mojang.math.Vector3f(1.0F, 0.0F, 0.0F)));
+		}
 		RenderSystem.applyModelViewMatrix();
 		RenderSystem.setShader(GameRenderer::getPositionTexShader);
 		tessellator.end();

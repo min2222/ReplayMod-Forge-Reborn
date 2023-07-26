@@ -184,6 +184,9 @@ dependencies {
     shadow 'com.github.ReplayMod.JavaBlend:2.79.0:a0696f8'
     shadow "com.github.ReplayMod:ReplayStudio:a1e2b83", shadeExclusions
     shadow 'com.github.ReplayMod:lwjgl-utils:27dcd66'
+    
+    // FIXME this should be pulled in by ReplayStudio, and IntelliJ sees it, but javac for some reason does not
+    implementation 'com.github.viaversion:opennbt:0a02214' // 2.0-SNAPSHOT (ViaVersion Edition)
 
     // implementation(jGui){ transitive = false } // FG 1.2 puts all MC deps into the compile configuration and we don't want to shade those
     testImplementation 'junit:junit:4.11'
