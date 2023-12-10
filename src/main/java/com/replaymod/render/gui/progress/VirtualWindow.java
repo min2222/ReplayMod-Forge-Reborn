@@ -1,126 +1,99 @@
 package com.replaymod.render.gui.progress;
 
+import java.io.Closeable;
+
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.platform.Window;
-import com.replaymod.gui.function.Closeable;
-import com.replaymod.mixin.MainWindowAccessor;
+import com.replaymod.render.hooks.MinecraftClientExt;
+import com.replaymod.replay.mixin.MainWindowAccessor;
 
 import net.minecraft.client.Minecraft;
 
 public class VirtualWindow implements Closeable {
-    private final Minecraft mc;
-    private final Window window;
-    private final MainWindowAccessor acc;
+	private final Minecraft mc;
+	private final Window window;
+	private final MainWindowAccessor acc;
+	private final RenderTarget guiFramebuffer;
+	private boolean isBound;
+	private int framebufferWidth;
+	private int framebufferHeight;
+	private int gameWidth;
+	private int gameHeight;
 
-    private final RenderTarget guiFramebuffer;
-    private boolean isBound;
-    private int framebufferWidth, framebufferHeight;
+	public VirtualWindow(Minecraft mc) {
+		this.mc = mc;
+		this.window = mc.getWindow();
+		this.acc = (MainWindowAccessor) (Object) this.window;
+		this.framebufferWidth = this.acc.getFramebufferWidth();
+		this.framebufferHeight = this.acc.getFramebufferHeight();
+		this.guiFramebuffer = new TextureTarget(this.framebufferWidth, this.framebufferHeight, true, false);
+		MinecraftClientExt.get(mc).setWindowDelegate(this);
+	}
 
-    private int gameWidth, gameHeight;
+	public void close() {
+		this.guiFramebuffer.destroyBuffers();
+		MinecraftClientExt.get(this.mc).setWindowDelegate((VirtualWindow) null);
+	}
 
+	public void bind() {
+		this.gameWidth = this.acc.getFramebufferWidth();
+		this.gameHeight = this.acc.getFramebufferHeight();
+		this.acc.setFramebufferWidth(this.framebufferWidth);
+		this.acc.setFramebufferHeight(this.framebufferHeight);
+		this.applyScaleFactor();
+		this.isBound = true;
+	}
 
-    public VirtualWindow(Minecraft mc) {
-        this.mc = mc;
-        this.window = mc.getWindow();
-        this.acc = (MainWindowAccessor) (Object) this.window;
+	public void unbind() {
+		this.acc.setFramebufferWidth(this.gameWidth);
+		this.acc.setFramebufferHeight(this.gameHeight);
+		this.applyScaleFactor();
+		this.isBound = false;
+	}
 
-        framebufferWidth = acc.getFramebufferWidth();
-        framebufferHeight = acc.getFramebufferHeight();
+	public void beginWrite() {
+		this.guiFramebuffer.bindWrite(true);
+	}
 
-        //#if MC>=11700
-        //$$ guiFramebuffer = new WindowFramebuffer(framebufferWidth, framebufferHeight);
-        //#else
-        guiFramebuffer = new TextureTarget(framebufferWidth, framebufferHeight, true
-                //#if MC>=11400
-                , false
-                //#endif
-        );
-        //#endif
+	public void endWrite() {
+		this.guiFramebuffer.unbindWrite();
+	}
 
-        //TODO
-        //MinecraftClientExt.get(mc).setWindowDelegate(this);
-    }
+	public void flip() {
+		this.guiFramebuffer.blitToScreen(this.framebufferWidth, this.framebufferHeight);
+		this.window.updateDisplay();
+	}
 
-    @Override
-    public void close() {
-        guiFramebuffer.destroyBuffers();
-        //TODO
-        //MinecraftClientExt.get(mc).setWindowDelegate(null);
-    }
+	public void onResolutionChanged(int newWidth, int newHeight) {
+		if (newWidth != 0 && newHeight != 0) {
+			if (this.framebufferWidth != newWidth || this.framebufferHeight != newHeight) {
+				this.framebufferWidth = newWidth;
+				this.framebufferHeight = newHeight;
+				this.guiFramebuffer.resize(newWidth, newHeight, false);
+				this.applyScaleFactor();
+				if (this.mc.screen != null) {
+					this.mc.screen.resize(this.mc, this.window.getGuiScaledWidth(), this.window.getGuiScaledHeight());
+				}
 
-    public void bind() {
-        gameWidth = acc.getFramebufferWidth();
-        gameHeight = acc.getFramebufferHeight();
-        acc.setFramebufferWidth(framebufferWidth);
-        acc.setFramebufferHeight(framebufferHeight);
-        applyScaleFactor();
-        isBound = true;
-    }
+			}
+		}
+	}
 
-    public void unbind() {
-        acc.setFramebufferWidth(gameWidth);
-        acc.setFramebufferHeight(gameHeight);
-        applyScaleFactor();
-        isBound = false;
-    }
+	private void applyScaleFactor() {
+		this.window.setGuiScale((double) this.window
+				.calculateScale((Integer) this.mc.options.guiScale().get().intValue(), this.mc.isEnforceUnicode()));
+	}
 
-    public void beginWrite() {
-        guiFramebuffer.bindWrite(true);
-    }
+	public int getFramebufferWidth() {
+		return this.framebufferWidth;
+	}
 
-    public void endWrite() {
-        guiFramebuffer.unbindWrite();
-    }
+	public int getFramebufferHeight() {
+		return this.framebufferHeight;
+	}
 
-    public void flip() {
-        guiFramebuffer.blitToScreen(framebufferWidth, framebufferHeight);
-
-        window.updateDisplay();
-    }
-
-    /**
-     * Updates the size of the window's framebuffer. Must only be called while this window is bound.
-     */
-    public void onResolutionChanged(int newWidth, int newHeight) {
-        if (newWidth == 0 || newHeight == 0) {
-            // These can be zero on Windows if minimized.
-            // Creating zero-sized framebuffers however will throw an error, so we never want to switch to zero values.
-            return;
-        }
-
-        if (framebufferWidth == newWidth && framebufferHeight == newHeight) {
-            return; // size is unchanged, nothing to do
-        }
-
-        framebufferWidth = newWidth;
-        framebufferHeight = newHeight;
-
-        //#if MC>=11400
-        guiFramebuffer.resize(newWidth, newHeight
-                //#if MC>=11400
-                , false
-                //#endif
-        );
-        applyScaleFactor();
-        if (mc.screen != null) {
-            mc.screen.resize(mc, window.getGuiScaledWidth(), window.getGuiScaledHeight());
-        }
-    }
-
-    private void applyScaleFactor() {
-        window.setGuiScale(window.calculateScale(mc.options.guiScale().get(), mc.isEnforceUnicode()));
-    }
-
-    public int getFramebufferWidth() {
-        return framebufferWidth;
-    }
-
-    public int getFramebufferHeight() {
-        return framebufferHeight;
-    }
-
-    public boolean isBound() {
-        return isBound;
-    }
+	public boolean isBound() {
+		return this.isBound;
+	}
 }

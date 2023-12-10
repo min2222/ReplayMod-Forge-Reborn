@@ -4,284 +4,290 @@ import java.nio.ByteBuffer;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.replaymod.core.utils.Utils;
-import com.replaymod.gui.GuiRenderer;
-import com.replaymod.gui.RenderInfo;
-import com.replaymod.gui.container.GuiPanel;
-import com.replaymod.gui.container.GuiScreen;
-import com.replaymod.gui.element.GuiButton;
-import com.replaymod.gui.element.GuiCheckbox;
-import com.replaymod.gui.element.GuiLabel;
-import com.replaymod.gui.element.advanced.GuiProgressBar;
-import com.replaymod.gui.function.Tickable;
-import com.replaymod.gui.layout.CustomLayout;
-import com.replaymod.gui.layout.HorizontalLayout;
+import com.replaymod.lib.de.johni0702.minecraft.gui.GuiRenderer;
+import com.replaymod.lib.de.johni0702.minecraft.gui.container.AbstractGuiScreen;
+import com.replaymod.lib.de.johni0702.minecraft.gui.container.GuiPanel;
+import com.replaymod.lib.de.johni0702.minecraft.gui.container.GuiScreen;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiButton;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiCheckbox;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiElement;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiLabel;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.advanced.GuiProgressBar;
+import com.replaymod.lib.de.johni0702.minecraft.gui.layout.CustomLayout;
+import com.replaymod.lib.de.johni0702.minecraft.gui.layout.HorizontalLayout;
+import com.replaymod.lib.de.johni0702.minecraft.gui.layout.LayoutData;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.Dimension;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.ReadablePoint;
+import com.replaymod.render.capturer.RenderInfo;
 import com.replaymod.render.rendering.VideoRenderer;
 
-import de.johni0702.minecraft.gui.utils.lwjgl.Dimension;
-import de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
-import de.johni0702.minecraft.gui.utils.lwjgl.ReadablePoint;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.Tickable;
 import net.minecraft.client.resources.language.I18n;
 import net.minecraft.resources.ResourceLocation;
 
 public class GuiVideoRenderer extends GuiScreen implements Tickable {
-    private static final ResourceLocation NO_PREVIEW_TEXTURE = new ResourceLocation("replaymod", "logo.jpg");
+	private static final ResourceLocation NO_PREVIEW_TEXTURE = new ResourceLocation("replaymod", "logo.jpg");
+	private final VideoRenderer renderer;
+	public final GuiLabel title = (GuiLabel) (new GuiLabel()).setI18nText("replaymod.gui.rendering.title",
+			new Object[0]);
+	public final GuiPanel imagePanel = (GuiPanel) (new GuiPanel() {
+		public void draw(GuiRenderer renderer, ReadableDimension size, RenderInfo renderInfo) {
+			if (GuiVideoRenderer.this.previewCheckbox.isChecked()) {
+				GuiVideoRenderer.this.renderPreview(renderer, size);
+			} else {
+				GuiVideoRenderer.this.renderNoPreview(renderer, size);
+			}
 
-    private final VideoRenderer renderer;
+		}
+	}).setSize(Integer.MAX_VALUE, Integer.MAX_VALUE);
+	public final GuiCheckbox previewCheckbox = (GuiCheckbox) (new GuiCheckbox())
+			.setI18nLabel("replaymod.gui.rendering.preview", new Object[0]);
+	public final GuiLabel renderTime = new GuiLabel();
+	public final GuiLabel remainingTime = new GuiLabel();
+	public final GuiProgressBar progressBar = new GuiProgressBar();
+	public final GuiPanel buttonPanel = (GuiPanel) (new GuiPanel()).setLayout((new HorizontalLayout()).setSpacing(4));
+	public final GuiButton pauseButton;
+	public final GuiButton cancelButton;
+	private DynamicTexture previewTexture;
+	private boolean previewTextureDirty;
+	private int renderTimeTaken;
+	private long prevTime;
+	private long frameStartTime;
+	private int prevRenderedFrames;
+	private int renderTimeLeft;
+	private int[] renderTimes;
+	private int currentIndex;
 
-    public final GuiLabel title = new GuiLabel().setI18nText("replaymod.gui.rendering.title");
-    public final GuiPanel imagePanel = new GuiPanel() {
-        @Override
-        public void draw(GuiRenderer renderer, ReadableDimension size, RenderInfo renderInfo) {
-            if (previewCheckbox.isChecked()) {
-                renderPreview(renderer, size);
-            } else {
-                renderNoPreview(renderer, size);
-            }
-        }
-    }.setSize(Integer.MAX_VALUE, Integer.MAX_VALUE);
-    public final GuiCheckbox previewCheckbox = new GuiCheckbox().setI18nLabel("replaymod.gui.rendering.preview");
-    public final GuiLabel renderTime = new GuiLabel();
-    public final GuiLabel remainingTime = new GuiLabel();
-    public final GuiProgressBar progressBar = new GuiProgressBar();
-    public final GuiPanel buttonPanel = new GuiPanel().setLayout(new HorizontalLayout().setSpacing(4));
-    public final GuiButton pauseButton = new GuiButton(buttonPanel).onClick(new Runnable() {
-        @Override
-        public void run() {
-            if (renderer.isPaused()) {
-                pauseButton.setI18nLabel("replaymod.gui.rendering.pause");
-                renderer.setPaused(false);
-            } else {
-                pauseButton.setI18nLabel("replaymod.gui.rendering.resume");
-                renderer.setPaused(true);
-            }
-        }
-    }).setI18nLabel("replaymod.gui.rendering.pause").setSize(150, 20);
+	public GuiVideoRenderer(VideoRenderer renderer) {
+		this.pauseButton = (GuiButton) ((GuiButton) ((GuiButton) (new GuiButton(this.buttonPanel))
+				.onClick(new Runnable() {
+					public void run() {
+						if (GuiVideoRenderer.this.renderer.isPaused()) {
+							GuiVideoRenderer.this.pauseButton.setI18nLabel("replaymod.gui.rendering.pause",
+									new Object[0]);
+							GuiVideoRenderer.this.renderer.setPaused(false);
+						} else {
+							GuiVideoRenderer.this.pauseButton.setI18nLabel("replaymod.gui.rendering.resume",
+									new Object[0]);
+							GuiVideoRenderer.this.renderer.setPaused(true);
+						}
 
-    public final GuiButton cancelButton = new GuiButton(buttonPanel) {
-        boolean waitingForConfirmation;
+					}
+				})).setI18nLabel("replaymod.gui.rendering.pause", new Object[0])).setSize(150, 20);
+		this.cancelButton = (GuiButton) ((GuiButton) (new GuiButton(this.buttonPanel) {
+			boolean waitingForConfirmation;
 
-        @Override
-        public boolean mouseClick(ReadablePoint position, int button) {
-            boolean result = super.mouseClick(position, button);
-            if (waitingForConfirmation && !result) {
-                setI18nLabel("replaymod.gui.rendering.cancel");
-                waitingForConfirmation = false;
-            }
-            return result;
-        }
+			public boolean mouseClick(ReadablePoint position, int button) {
+				boolean result = super.mouseClick(position, button);
+				if (this.waitingForConfirmation && !result) {
+					this.setI18nLabel("replaymod.gui.rendering.cancel", new Object[0]);
+					this.waitingForConfirmation = false;
+				}
 
-        @Override
-        public void onClick() {
-            super.onClick();
-            if (!waitingForConfirmation) {
-                setI18nLabel("replaymod.gui.rendering.cancel.callback");
-                waitingForConfirmation = true;
-            } else {
-                renderer.cancel();
-            }
-        }
-    }.setI18nLabel("replaymod.gui.rendering.cancel").setSize(150, 20);
+				return result;
+			}
 
-    private DynamicTexture previewTexture;
-    private boolean previewTextureDirty;
+			public void onClick() {
+				super.onClick();
+				if (!this.waitingForConfirmation) {
+					this.setI18nLabel("replaymod.gui.rendering.cancel.callback", new Object[0]);
+					this.waitingForConfirmation = true;
+				} else {
+					GuiVideoRenderer.this.renderer.cancel();
+				}
 
-    {
-        final GuiPanel contentPanel = new GuiPanel(this).setLayout(new CustomLayout<GuiPanel>() {
-            @Override
-            protected void layout(GuiPanel container, int width, int height) {
-                size(progressBar, width, 20);
-                pos(title, width / 2 - width(title) / 2, 0);
-                pos(imagePanel, 0, y(title) + height(title) + 5);
-                pos(buttonPanel, width / 2 - width(buttonPanel) / 2, height - height(buttonPanel));
-                pos(progressBar, width / 2 - width(progressBar) / 2, y(buttonPanel) - 5 - height(progressBar));
-                pos(renderTime, 0, y(progressBar) - 2 - height(renderTime));
-                pos(remainingTime, width - width(remainingTime), y(progressBar) - 2 - height(renderTime));
-                pos(previewCheckbox, width / 2 - width(previewCheckbox) / 2, y(renderTime) - 10 - height(previewCheckbox));
-                size(imagePanel, width, y(previewCheckbox) - 5 - y(imagePanel));
-            }
-        }).addElements(null, title, imagePanel, previewCheckbox, renderTime, remainingTime, progressBar, buttonPanel);
-        setLayout(new CustomLayout<GuiScreen>() {
-            @Override
-            protected void layout(GuiScreen container, int width, int height) {
-                // Make sure we have some space around our central GUI components
-                pos(contentPanel, 5, 3);
-                size(contentPanel, width - 10, height - 10);
-            }
-        });
-        setBackground(Background.DIRT);
-    }
+			}
+		}).setI18nLabel("replaymod.gui.rendering.cancel", new Object[0])).setSize(150, 20);
+		final GuiPanel contentPanel = (GuiPanel) ((GuiPanel) (new GuiPanel(this))
+				.setLayout(new CustomLayout<GuiPanel>() {
+					protected void layout(GuiPanel container, int width, int height) {
+						this.size(GuiVideoRenderer.this.progressBar, width, 20);
+						this.pos(GuiVideoRenderer.this.title, width / 2 - this.width(GuiVideoRenderer.this.title) / 2,
+								0);
+						this.pos(GuiVideoRenderer.this.imagePanel, 0,
+								this.y(GuiVideoRenderer.this.title) + this.height(GuiVideoRenderer.this.title) + 5);
+						this.pos(GuiVideoRenderer.this.buttonPanel,
+								width / 2 - this.width(GuiVideoRenderer.this.buttonPanel) / 2,
+								height - this.height(GuiVideoRenderer.this.buttonPanel));
+						this.pos(GuiVideoRenderer.this.progressBar,
+								width / 2 - this.width(GuiVideoRenderer.this.progressBar) / 2,
+								this.y(GuiVideoRenderer.this.buttonPanel) - 5
+										- this.height(GuiVideoRenderer.this.progressBar));
+						this.pos(GuiVideoRenderer.this.renderTime, 0, this.y(GuiVideoRenderer.this.progressBar) - 2
+								- this.height(GuiVideoRenderer.this.renderTime));
+						this.pos(GuiVideoRenderer.this.remainingTime,
+								width - this.width(GuiVideoRenderer.this.remainingTime),
+								this.y(GuiVideoRenderer.this.progressBar) - 2
+										- this.height(GuiVideoRenderer.this.renderTime));
+						this.pos(GuiVideoRenderer.this.previewCheckbox,
+								width / 2 - this.width(GuiVideoRenderer.this.previewCheckbox) / 2,
+								this.y(GuiVideoRenderer.this.renderTime) - 10
+										- this.height(GuiVideoRenderer.this.previewCheckbox));
+						this.size(GuiVideoRenderer.this.imagePanel, width, this.y(GuiVideoRenderer.this.previewCheckbox)
+								- 5 - this.y(GuiVideoRenderer.this.imagePanel));
+					}
+				})).addElements((LayoutData) null, new GuiElement[] { this.title, this.imagePanel, this.previewCheckbox,
+						this.renderTime, this.remainingTime, this.progressBar, this.buttonPanel });
+		this.setLayout(new CustomLayout<GuiScreen>() {
+			protected void layout(GuiScreen container, int width, int height) {
+				this.pos(contentPanel, 5, 3);
+				this.size(contentPanel, width - 10, height - 10);
+			}
+		});
+		this.setBackground(AbstractGuiScreen.Background.DIRT);
+		this.renderTimeTaken = 0;
+		this.prevTime = -1L;
+		this.frameStartTime = -1L;
+		this.prevRenderedFrames = 0;
+		this.renderTimeLeft = 0;
+		this.renderTimes = new int[50];
+		this.currentIndex = 0;
+		this.renderer = renderer;
+	}
 
-    public GuiVideoRenderer(VideoRenderer renderer) {
-        this.renderer = renderer;
-    }
+	public void tick() {
+		long current = System.nanoTime() / 1000000L;
+		if (!this.renderer.isPaused() && this.renderer.getFramesDone() > 0 && this.prevTime > -1L) {
+			this.renderTimeTaken = (int) ((long) this.renderTimeTaken + (current - this.prevTime));
+		} else {
+			this.frameStartTime = current;
+		}
 
-    //the total render time
-    private int renderTimeTaken = 0;
+		this.prevTime = current;
+		int framesRendered;
+		int renderTime;
+		if (this.prevRenderedFrames < this.renderer.getFramesDone()) {
+			if (this.prevRenderedFrames > 0) {
+				framesRendered = this.renderer.getFramesDone() - this.prevRenderedFrames;
+				renderTime = (int) (current - this.frameStartTime);
+				int avgRenderTime = renderTime / framesRendered;
 
-    //the time at which the Screen was last updated
-    private long prevTime = -1;
+				int validValues;
+				for (validValues = 0; validValues < framesRendered; ++validValues) {
+					this.renderTimes[this.currentIndex] = avgRenderTime;
+					++this.currentIndex;
+					if (this.currentIndex >= this.renderTimes.length) {
+						this.currentIndex = 0;
+					}
+				}
 
-    //the time at which the rendering of the current frame started
-    private long frameStartTime = -1;
+				validValues = 0;
+				int totalTime = 0;
+				int[] var8 = this.renderTimes;
+				int var9 = var8.length;
 
-    //the amount of frames that were rendered when the time left was last updated
-    private int prevRenderedFrames = 0;
+				for (int var10 = 0; var10 < var9; ++var10) {
+					int i = var8[var10];
+					if (i > 0) {
+						totalTime += i;
+						++validValues;
+					}
+				}
 
-    //the estimated render time that is left (in seconds)
-    private int renderTimeLeft = 0;
+				float averageRenderTime = validValues > 0 ? (float) (totalTime / validValues) : 0.0F;
+				this.renderTimeLeft = Math.round(averageRenderTime
+						* (float) (this.renderer.getTotalFrames() - this.renderer.getFramesDone()) / 1000.0F);
+			}
 
-    //each of the durations the rendering process took for the last 50 frames
-    private int[] renderTimes = new int[50];
-    //the algorithm's current position in the renderTimes array
-    private int currentIndex = 0;
+			this.frameStartTime = current;
+			this.prevRenderedFrames = this.renderer.getFramesDone();
+		}
 
-    @Override
-    public void tick() {
-        long current = System.currentTimeMillis();
+		GuiLabel var10000 = this.renderTime;
+		String var10001 = I18n.get("replaymod.gui.rendering.timetaken", new Object[0]);
+		var10000.setText(var10001 + ": " + this.secToString(this.renderTimeTaken / 1000));
+		var10000 = this.remainingTime;
+		var10001 = I18n.get("replaymod.gui.rendering.timeleft", new Object[0]);
+		var10000.setText(var10001 + ": " + this.secToString(this.renderTimeLeft));
+		framesRendered = this.renderer.getFramesDone();
+		renderTime = this.renderer.getTotalFrames();
+		this.progressBar.setI18nLabel("replaymod.gui.rendering.progress", new Object[] { framesRendered, renderTime });
+		this.progressBar.setProgress((float) framesRendered / (float) renderTime);
+	}
 
-        //first, update the total render time (only if rendering is not paused and has already started)
-        if (!renderer.isPaused() && renderer.getFramesDone() > 0 && prevTime > -1) {
-            renderTimeTaken += (current - prevTime);
-        } else {
-            //if the rendering process is paused, we have to update the frame start time to prevent huge render times
-            //for the currently rendered frame(s)
-            frameStartTime = current;
-        }
+	private String secToString(int seconds) {
+		int hours = seconds / 3600;
+		int min = seconds / 60 - hours * 60;
+		int sec = seconds - (min * 60 + hours * 60 * 60);
+		StringBuilder builder = new StringBuilder();
+		if (hours > 0) {
+			builder.append(hours).append(I18n.get("replaymod.gui.hours", new Object[0]));
+		}
 
-        //always update prevTime, so we don't get huge time jumps when unpausing the rendering process
-        prevTime = current;
+		if (min > 0 || hours > 0) {
+			builder.append(min).append(I18n.get("replaymod.gui.minutes", new Object[0]));
+		}
 
+		builder.append(sec).append(I18n.get("replaymod.gui.seconds", new Object[0]));
+		return builder.toString();
+	}
 
-        //calculate estimated time left
+	private synchronized void renderPreview(GuiRenderer guiRenderer, ReadableDimension size) {
+		ReadableDimension videoSize = this.renderer.getFrameSize();
+		int videoWidth = videoSize.getWidth();
+		int videoHeight = videoSize.getHeight();
+		if (this.previewTexture == null) {
+			this.previewTexture = new DynamicTexture(videoWidth, videoHeight, true);
+		}
 
-        //if the amount of rendered frames has increased since the last update
-        if (prevRenderedFrames < renderer.getFramesDone()) {
-            //we don't include the first frame in our calculations,
-            //as setting up the rendering process takes a few seconds
-            if (prevRenderedFrames > 0) {
+		if (this.previewTextureDirty) {
+			this.previewTexture.upload();
+			this.previewTextureDirty = false;
+		}
 
-                //calculate the amount of frames that have been rendered since the last update
-                int framesRendered = renderer.getFramesDone() - prevRenderedFrames;
+		guiRenderer.bindTexture(this.previewTexture.getId());
+		this.renderPreviewTexture(guiRenderer, size, videoWidth, videoHeight);
+	}
 
-                //calculate the time it took to render these frames
-                int renderTime = (int) (current - frameStartTime);
+	private void renderNoPreview(GuiRenderer guiRenderer, ReadableDimension size) {
+		guiRenderer.bindTexture(NO_PREVIEW_TEXTURE);
+		this.renderPreviewTexture(guiRenderer, size, 1280, 720);
+	}
 
-                //calculate the average time it took for each of these frames to render
-                int avgRenderTime = renderTime / framesRendered;
+	private void renderPreviewTexture(GuiRenderer guiRenderer, ReadableDimension size, int videoWidth,
+			int videoHeight) {
+		Dimension dimension = Utils.fitIntoBounds(new Dimension(videoWidth, videoHeight), size);
+		int width = dimension.getWidth();
+		int height = dimension.getHeight();
+		int x = (size.getWidth() - width) / 2;
+		int y = (size.getHeight() - height) / 2;
+		guiRenderer.drawTexturedRect(x, y, 0, 0, width, height, videoWidth, videoHeight, videoWidth, videoHeight);
+	}
 
-                //add all of the average render times to the render times array
-                for (int i = 0; i < framesRendered; i++) {
-                    renderTimes[currentIndex] = avgRenderTime;
-                    currentIndex++;
-                    if (currentIndex >= renderTimes.length) currentIndex = 0;
-                }
+	public void updatePreview(ByteBuffer buffer, ReadableDimension size) {
+		if (this.previewCheckbox.isChecked() && this.previewTexture != null) {
+			buffer.mark();
+			synchronized (this) {
+				NativeImage data = this.previewTexture.getPixels();
 
-                //the renderTimes array initially contains lots of zeros,
-                //so we count the amount of valid timespans
-                int validValues = 0;
+				assert data != null;
 
-                int totalTime = 0;
-                for (int i : renderTimes) {
-                    if (i > 0) {
-                        totalTime += i;
-                        validValues++;
-                    }
-                }
+				int width = size.getWidth();
+				int y = 0;
 
-                //calculate the average render time for the previous [up to 50] frames
-                float averageRenderTime = validValues > 0 ? totalTime / validValues : 0;
+				while (true) {
+					if (y >= size.getHeight()) {
+						this.previewTextureDirty = true;
+						break;
+					}
 
-                //calculate the remaining render time in seconds
-                renderTimeLeft = Math.round((averageRenderTime * (renderer.getTotalFrames() - renderer.getFramesDone())) / 1000);
-            }
+					for (int x = 0; x < width; ++x) {
+						int b = buffer.get() & 255;
+						int g = buffer.get() & 255;
+						int r = buffer.get() & 255;
+						buffer.get();
+						int value = -16777216 | b << 16 | g << 8 | r;
+						data.setPixelRGBA(x, y, value);
+					}
 
-            //set the render start time of the next frame(s) to the current timestamp
-            frameStartTime = current;
-            //update the amount of rendered frames for the last calculation
-            prevRenderedFrames = renderer.getFramesDone();
-        }
+					++y;
+				}
+			}
 
-        renderTime.setText(I18n.get("replaymod.gui.rendering.timetaken") + ": " + secToString(renderTimeTaken / 1000));
-        remainingTime.setText(I18n.get("replaymod.gui.rendering.timeleft") + ": " + secToString(renderTimeLeft));
+			buffer.reset();
+		}
 
-        int framesDone = renderer.getFramesDone(), framesTotal = renderer.getTotalFrames();
-        progressBar.setI18nLabel("replaymod.gui.rendering.progress", framesDone, framesTotal);
-        progressBar.setProgress((float) framesDone / framesTotal);
-    }
-
-    private String secToString(int seconds) {
-        int hours = seconds / (60 * 60);
-        int min = seconds / 60 - hours * 60;
-        int sec = seconds - ((min * 60) + (hours * 60 * 60));
-
-        StringBuilder builder = new StringBuilder();
-        if (hours > 0) builder.append(hours).append(I18n.get("replaymod.gui.hours"));
-        if (min > 0 || hours > 0) builder.append(min).append(I18n.get("replaymod.gui.minutes"));
-        builder.append(sec).append(I18n.get("replaymod.gui.seconds"));
-
-        return builder.toString();
-    }
-
-    private synchronized void renderPreview(GuiRenderer guiRenderer, ReadableDimension size) {
-        ReadableDimension videoSize = renderer.getFrameSize();
-        final int videoWidth = videoSize.getWidth();
-        final int videoHeight = videoSize.getHeight();
-
-        if (previewTexture == null) {
-            previewTexture = new DynamicTexture(videoWidth, videoHeight, true);
-        }
-
-        if (previewTextureDirty) {
-            previewTexture.upload();
-            previewTextureDirty = false;
-        }
-
-        guiRenderer.bindTexture(previewTexture.getId());
-        renderPreviewTexture(guiRenderer, size, videoWidth, videoHeight);
-    }
-
-    private void renderNoPreview(GuiRenderer guiRenderer, ReadableDimension size) {
-    	//TODO texture is not working properly
-        guiRenderer.bindTexture(NO_PREVIEW_TEXTURE);
-        renderPreviewTexture(guiRenderer, size, 1280, 720);
-    }
-
-    private void renderPreviewTexture(GuiRenderer guiRenderer, ReadableDimension size,
-                                      int videoWidth, int videoHeight) {
-        Dimension dimension = Utils.fitIntoBounds(new Dimension(videoWidth, videoHeight), size);
-
-        int width = dimension.getWidth();
-        int height = dimension.getHeight();
-        int x = (size.getWidth() - width) / 2;
-        int y = (size.getHeight() - height) / 2;
-
-        guiRenderer.drawTexturedRect(x, y, 0, 0, width, height, videoWidth, videoHeight, videoWidth, videoHeight);
-    }
-
-    public void updatePreview(ByteBuffer buffer, ReadableDimension size) {
-        if (previewCheckbox.isChecked() && previewTexture != null) {
-            buffer.mark();
-            synchronized (this) {
-                NativeImage data = previewTexture.getPixels();
-                assert data != null;
-                // Note: Optifine changes the texture data array to be three times as long (for use by shaders),
-                //       we only want to initialize the first third and since we use our frame size, not the array size,
-                //       we're good to go.
-                int width = size.getWidth();
-                for (int y = 0; y < size.getHeight(); y++) {
-                    for (int x = 0; x < width; x++) {
-                        int b = buffer.get() & 0xff;
-                        int g = buffer.get() & 0xff;
-                        int r = buffer.get() & 0xff;
-                        buffer.get(); // alpha
-                        int value = 0xff << 24 | b << 16 | g << 8 | r;
-                        data.setPixelRGBA(x, y, value); // actually takes ABGR, not RGBA
-                    }
-                }
-                previewTextureDirty = true;
-            }
-            buffer.reset();
-        }
-    }
+	}
 }

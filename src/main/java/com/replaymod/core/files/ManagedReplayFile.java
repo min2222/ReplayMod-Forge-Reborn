@@ -5,19 +5,17 @@ import java.io.IOException;
 import com.replaymod.replaystudio.replay.ReplayFile;
 
 public class ManagedReplayFile extends DelegatingReplayFile {
-    private Runnable onClose;
+	private Runnable onClose;
 
-    public ManagedReplayFile(ReplayFile delegate, Runnable onClose) {
-        super(delegate);
+	public ManagedReplayFile(ReplayFile delegate, Runnable onClose) {
+		super(delegate);
+		this.onClose = onClose;
+	}
 
-        this.onClose = onClose;
-    }
-
-    @Override
-    public void close() throws IOException {	
-        super.close();
-
-        onClose.run();
-        onClose = () -> {};
-    }
+	public void close() throws IOException {
+		super.close();
+		this.onClose.run();
+		this.onClose = () -> {
+		};
+	}
 }

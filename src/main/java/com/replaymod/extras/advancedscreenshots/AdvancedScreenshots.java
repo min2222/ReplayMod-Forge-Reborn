@@ -4,27 +4,27 @@ import com.replaymod.core.ReplayMod;
 import com.replaymod.extras.Extra;
 
 public class AdvancedScreenshots implements Extra {
+	private ReplayMod mod;
+	private static AdvancedScreenshots instance;
 
-    private ReplayMod mod;
+	public AdvancedScreenshots() {
+		instance = this;
+	}
 
-    @Override
-    public void register(ReplayMod mod) {
-        this.mod = mod;
-    }
+	public void register(ReplayMod mod) {
+		this.mod = mod;
+	}
 
-    private static AdvancedScreenshots instance;
+	public static void take() {
+		if (instance != null) {
+			instance.takeScreenshot();
+		}
 
-    {
-        instance = this;
-    }
+	}
 
-    public static void take() {
-        if (instance != null) {
-            instance.takeScreenshot();
-        }
-    }
-
-    private void takeScreenshot() {
-        ReplayMod.instance.runLater(() -> new GuiCreateScreenshot(mod).open());
-    }
+	private void takeScreenshot() {
+		ReplayMod.instance.runLater(() -> {
+			(new GuiCreateScreenshot(this.mod)).open();
+		});
+	}
 }

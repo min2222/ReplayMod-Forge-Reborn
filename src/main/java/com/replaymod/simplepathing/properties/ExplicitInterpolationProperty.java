@@ -1,44 +1,38 @@
 package com.replaymod.simplepathing.properties;
 
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
-import com.replaymod.gui.utils.NonNull;
-import com.replaymod.replaystudio.pathing.property.AbstractProperty;
-import com.replaymod.replaystudio.pathing.property.PropertyPart;
-import org.apache.commons.lang3.ObjectUtils;
-
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 
-/**
- * Property indicating that the next path segment's interpolator is fixed
- */
+import org.apache.commons.lang3.ObjectUtils;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import com.replaymod.replaystudio.pathing.property.AbstractProperty;
+import com.replaymod.replaystudio.pathing.property.PropertyGroup;
+import com.replaymod.replaystudio.pathing.property.PropertyPart;
+
 public class ExplicitInterpolationProperty extends AbstractProperty<Object> {
-    public static final ExplicitInterpolationProperty PROPERTY = new ExplicitInterpolationProperty();
+	public static final ExplicitInterpolationProperty PROPERTY = new ExplicitInterpolationProperty();
 
-    private ExplicitInterpolationProperty() {
-        super("interpolationFixed", "<internal>", null, new Object());
-    }
+	private ExplicitInterpolationProperty() {
+		super("interpolationFixed", "<internal>", (PropertyGroup) null, new Object());
+	}
 
-    @Override
-    public Collection<PropertyPart<Object>> getParts() {
-        return Collections.emptyList();
-    }
+	public Collection<PropertyPart<Object>> getParts() {
+		return Collections.emptyList();
+	}
 
-    @Override
-    public void applyToGame(Object value, @NonNull Object replayHandler) {
-        // dummy property, do nothing
-    }
+	public void applyToGame(Object value, @NonNull Object replayHandler) {
+	}
 
-    @Override
-    public void toJson(JsonWriter writer, Object value) throws IOException {
-        writer.nullValue();
-    }
+	public void toJson(JsonWriter writer, Object value) throws IOException {
+		writer.nullValue();
+	}
 
-    @Override
-    public Object fromJson(JsonReader reader) throws IOException {
-        reader.nextNull();
-        return ObjectUtils.NULL;
-    }
+	public Object fromJson(JsonReader reader) throws IOException {
+		reader.nextNull();
+		return ObjectUtils.NULL;
+	}
 }

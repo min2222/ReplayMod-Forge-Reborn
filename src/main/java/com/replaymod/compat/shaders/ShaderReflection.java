@@ -1,59 +1,43 @@
 package com.replaymod.compat.shaders;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.Camera;
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
+
 public class ShaderReflection {
+	public static Field shaders_frameTimeCounter;
+	public static Field shaders_isShadowPass;
+	public static Method shaders_beginRender;
+	public static Field renderGlobal_chunksToUpdateForced;
+	public static Method config_isShaders;
 
-    // Shaders.frameTimeCounter
-    public static Field shaders_frameTimeCounter;
+	static {
+		try {
+			Class shadersClass;
+			try {
+				shadersClass = Class.forName("shadersmod.client.Shaders");
+			} catch (ClassNotFoundException var2) {
+				shadersClass = Class.forName("net.optifine.shaders.Shaders");
+			}
 
-    // Shaders.isShadowPass
-    public static Field shaders_isShadowPass;
+			shaders_frameTimeCounter = shadersClass.getDeclaredField("frameTimeCounter");
+			shaders_frameTimeCounter.setAccessible(true);
+			shaders_isShadowPass = shadersClass.getDeclaredField("isShadowPass");
+			shaders_isShadowPass.setAccessible(true);
+			shaders_beginRender = shadersClass.getDeclaredMethod("beginRender", Minecraft.class, Camera.class,
+					Float.TYPE, Long.TYPE);
+			shaders_beginRender.setAccessible(true);
+			renderGlobal_chunksToUpdateForced = Class.forName("net.minecraft.client.renderer.RenderGlobal")
+					.getDeclaredField("chunksToUpdateForced");
+			renderGlobal_chunksToUpdateForced.setAccessible(true);
+			config_isShaders = Class.forName("Config").getDeclaredMethod("isShaders");
+			config_isShaders.setAccessible(true);
+		} catch (ClassNotFoundException var3) {
+		} catch (NoSuchFieldException | NoSuchMethodException var4) {
+			var4.printStackTrace();
+		}
 
-    // Shaders.beginRender()
-    public static Method shaders_beginRender;
-
-    // RenderGlobal.chunksToUpdateForced (Optifine only)
-    public static Field renderGlobal_chunksToUpdateForced;
-
-    // Config.isShaders() (Optifine only)
-    public static Method config_isShaders;
-
-    static {
-        try {
-            Class<?> shadersClass;
-            try {
-                shadersClass = Class.forName("shadersmod.client.Shaders"); // Pre Optifine 1.12.2 E1
-            } catch (ClassNotFoundException ignore) {
-                shadersClass = Class.forName("net.optifine.shaders.Shaders"); // Post Optifine 1.12.2 E1
-            }
-            shaders_frameTimeCounter = shadersClass.getDeclaredField("frameTimeCounter");
-            shaders_frameTimeCounter.setAccessible(true);
-
-            shaders_isShadowPass = shadersClass.getDeclaredField("isShadowPass");
-            shaders_isShadowPass.setAccessible(true);
-
-            shaders_beginRender = shadersClass.getDeclaredMethod("beginRender", Minecraft.class,
-                    Camera.class,
-                    float.class, long.class);
-            shaders_beginRender.setAccessible(true);
-
-            renderGlobal_chunksToUpdateForced = Class.forName("net.minecraft.client.renderer.RenderGlobal")
-                    .getDeclaredField("chunksToUpdateForced");
-            renderGlobal_chunksToUpdateForced.setAccessible(true);
-
-            config_isShaders = Class.forName("Config")
-                    .getDeclaredMethod("isShaders");
-            config_isShaders.setAccessible(true);
-        } catch (ClassNotFoundException ignore) {
-            // no shaders mod installed
-        } catch (NoSuchMethodException | NoSuchFieldException e) {
-            // the method wasn't found. Has it been renamed?
-            e.printStackTrace();
-        }
-    }
+	}
 }

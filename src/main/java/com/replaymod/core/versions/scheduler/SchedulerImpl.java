@@ -4,124 +4,108 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import com.replaymod.mixin.MinecraftAccessor;
+import com.replaymod.replay.mixin.MinecraftAccessor;
 
 import net.minecraft.ReportedException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.thread.ReentrantBlockableEventLoop;
 
 public class SchedulerImpl implements Scheduler {
-    private static final Minecraft mc = Minecraft.getInstance();
+	private static final Minecraft mc = Minecraft.getInstance();
+	private boolean inRunLater = false;
+	private boolean inRenderTaskQueue = false;
+	public final SchedulerImpl.ReplayModExecutor executor = new SchedulerImpl.ReplayModExecutor("Client/ReplayMod");
 
-    @Override
-    public void runSync(Runnable runnable) throws InterruptedException, ExecutionException, TimeoutException {
-        if (mc.isSameThread()) {
-            runnable.run();
-        } else {
-            executor.submit(() -> {
-                runnable.run();
-                return null;
-            }).get(30, TimeUnit.SECONDS);
-        }
-    }
+	public void runSync(Runnable runnable) throws InterruptedException, ExecutionException, TimeoutException {
+		if (mc.isSameThread()) {
+			runnable.run();
+		} else {
+			this.executor.submit(() -> {
+				runnable.run();
+				return null;
+			}).get(30L, TimeUnit.SECONDS);
+		}
 
-    @Override
-    public void runPostStartup(Runnable runnable) {
-        runLater(new Runnable() {
-            @Override
-            public void run() {
-                if (mc.getOverlay() != null) {
-                    // delay until after resources have been loaded
-                    runLater(this);
-                    return;
-                }
-                runnable.run();
-            }
-        });
-    }
+	}
 
-    /**
-     * Set when the currently running code has been scheduled by runLater.
-     * If this is the case, subsequent calls to runLater have to be delayed until all scheduled tasks have been
-     * processed, otherwise a livelock may occur.
-     */
-    private boolean inRunLater = false;
-    private boolean inRenderTaskQueue = false;
+	public void runPostStartup(Runnable runnable) {
+		this.runLater(new Runnable() {
+			public void run() {
+				if (SchedulerImpl.mc.getOverlay() != null) {
+					SchedulerImpl.this.runLater(this);
+				} else {
+					runnable.run();
+				}
+			}
+		});
+	}
 
-    // Starting 1.14 MC clears the queue of scheduled tasks on disconnect.
-    // This works fine for MC since it uses the queue only for packet handling but breaks our assumption that
-    // stuff submitted via runLater is actually always run (e.g. recording might not be fully stopped because parts
-    // of that are run via runLater and stopping the recording happens right around the time MC clears the queue).
-    // Luckily, that's also the version where MC pulled out the executor implementation, so we can just spin up our own.
-    public static class ReplayModExecutor extends ReentrantBlockableEventLoop<Runnable> {
-        private final Thread mcThread = Thread.currentThread();
+	public void runTasks() {
+		this.executor.runAllTasks();
+	}
 
-        private ReplayModExecutor(String string_1) {
-            super(string_1);
-        }
+	public void runLaterWithoutLock(Runnable runnable) {
+		this.runLater(runnable);
+	}
 
-        @Override
-        protected Runnable wrapRunnable(Runnable runnable) {
-            return runnable;
-        }
+	public void runLater(Runnable runnable) {
+		this.runLater(runnable, () -> {
+			this.runLater(runnable);
+		});
+	}
 
-        @Override
-        protected boolean shouldRun(Runnable runnable) {
-            return true;
-        }
+	private void runLater(Runnable runnable, Runnable defer) {
+		if (mc.isSameThread() && this.inRunLater && !this.inRenderTaskQueue) {
+			((MinecraftAccessor) mc).getRenderTaskQueue().offer(() -> {
+				this.inRenderTaskQueue = true;
 
-        @Override
-        protected Thread getRunningThread() {
-            return mcThread;
-        }
+				try {
+					defer.run();
+				} finally {
+					this.inRenderTaskQueue = false;
+				}
 
-        @Override
-        public void runAllTasks() {
-            super.runAllTasks();
-        }
-    }
+			});
+		} else {
+			this.executor.tell(() -> {
+				this.inRunLater = true;
 
-    public final ReplayModExecutor executor = new ReplayModExecutor("Client/ReplayMod");
+				try {
+					runnable.run();
+				} catch (ReportedException var6) {
+					var6.printStackTrace();
+					System.err.println(var6.getReport().getFriendlyReport());
+					mc.delayCrashRaw(var6.getReport());
+				} finally {
+					this.inRunLater = false;
+				}
 
-    @Override
-    public void runTasks() {
-        executor.runAllTasks();
-    }
+			});
+		}
 
-    @Override
-    public void runLaterWithoutLock(Runnable runnable) {
-        // MC 1.14+ no longer synchronizes on the queue while running its tasks
-        runLater(runnable);
-    }
+	}
 
-    @Override
-    public void runLater(Runnable runnable) {
-        runLater(runnable, () -> runLater(runnable));
-    }
+	public static class ReplayModExecutor extends ReentrantBlockableEventLoop<Runnable> {
+		private final Thread mcThread = Thread.currentThread();
 
-    private void runLater(Runnable runnable, Runnable defer) {
-        if (mc.isSameThread() && inRunLater && !inRenderTaskQueue) {
-            ((MinecraftAccessor) mc).getRenderTaskQueue().offer(() -> {
-                inRenderTaskQueue = true;
-                try {
-                    defer.run();
-                } finally {
-                    inRenderTaskQueue = false;
-                }
-            });
-        } else {
-            executor.tell(() -> {
-                inRunLater = true;
-                try {
-                    runnable.run();
-                } catch (ReportedException e) {
-                    e.printStackTrace();
-                    System.err.println(e.getReport().getFriendlyReport());
-                    mc.delayCrashRaw(e.getReport());
-                } finally {
-                    inRunLater = false;
-                }
-            });
-        }
-    }
+		private ReplayModExecutor(String string_1) {
+			super(string_1);
+		}
+
+		protected Runnable wrapRunnable(Runnable runnable) {
+			return runnable;
+		}
+
+		protected boolean shouldRun(Runnable runnable) {
+			return true;
+		}
+
+		protected Thread getRunningThread() {
+			return this.mcThread;
+		}
+
+		public void runAllTasks() {
+			super.runAllTasks();
+		}
+	}
 }

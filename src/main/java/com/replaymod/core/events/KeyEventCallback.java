@@ -1,21 +1,28 @@
 package com.replaymod.core.events;
 
-import com.replaymod.gui.utils.Event;
+import java.util.Iterator;
+
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.Event;
 
 public interface KeyEventCallback {
-    Event<KeyEventCallback> EVENT = Event.create((listeners) ->
-            (key, scanCode, action, modifiers) -> {
-                for (KeyEventCallback listener : listeners) {
-                    if (listener.onKeyEvent(key, scanCode, action, modifiers)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-    );
+	Event<KeyEventCallback> EVENT = Event.create((listeners) -> {
+		return (key, scanCode, action, modifiers) -> {
+			Iterator var5 = listeners.iterator();
 
-    int ACTION_RELEASE = org.lwjgl.glfw.GLFW.GLFW_RELEASE;
-    int ACTION_PRESS = org.lwjgl.glfw.GLFW.GLFW_PRESS;
+			KeyEventCallback listener;
+			do {
+				if (!var5.hasNext()) {
+					return false;
+				}
 
-    boolean onKeyEvent(int key, int scanCode, int action, int modifiers);
+				listener = (KeyEventCallback) var5.next();
+			} while (!listener.onKeyEvent(key, scanCode, action, modifiers));
+
+			return true;
+		};
+	});
+	int ACTION_RELEASE = 0;
+	int ACTION_PRESS = 1;
+
+	boolean onKeyEvent(int i, int j, int k, int l);
 }

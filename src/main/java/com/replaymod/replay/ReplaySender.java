@@ -1,37 +1,31 @@
 package com.replaymod.replay;
 
-import static com.replaymod.core.versions.MCVer.getMinecraft;
-
-import com.replaymod.mixin.MinecraftAccessor;
-import com.replaymod.mixin.TimerAccessor;
+import com.replaymod.core.versions.MCVer;
+import com.replaymod.replay.mixin.MinecraftAccessor;
+import com.replaymod.replay.mixin.TimerAccessor;
 
 import net.minecraft.client.Minecraft;
 
 public interface ReplaySender {
-    int currentTimeStamp();
+	int currentTimeStamp();
 
-    /**
-     * Whether the replay is currently paused.
-     *
-     * @return {@code true} if it is paused, {@code false} otherwise
-     */
-    public default boolean paused() {
-        Minecraft mc = getMinecraft();
-        TimerAccessor timer = (TimerAccessor) ((MinecraftAccessor) mc).getTimer();
-        return timer.getTickLength() == Float.POSITIVE_INFINITY;
-    }
+	default boolean paused() {
+		Minecraft mc = MCVer.getMinecraft();
+		TimerAccessor timer = (TimerAccessor) ((MinecraftAccessor) mc).getTimer();
+		return timer.getTickLength() == Float.POSITIVE_INFINITY;
+	}
 
-    void setReplaySpeed(double factor);
+	void setReplaySpeed(double d);
 
-    double getReplaySpeed();
+	double getReplaySpeed();
 
-    boolean isAsyncMode();
+	boolean isAsyncMode();
 
-    void setAsyncMode(boolean async);
+	void setAsyncMode(boolean bl);
 
-    void setSyncModeAndWait();
+	void setSyncModeAndWait();
 
-    void jumpToTime(int value); // async
+	void jumpToTime(int i);
 
-    void sendPacketsTill(int replayTime); // sync
+	void sendPacketsTill(int i);
 }

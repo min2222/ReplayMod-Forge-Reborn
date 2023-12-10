@@ -1,7 +1,5 @@
 package com.replaymod.pathing.player;
 
-import static com.replaymod.core.versions.MCVer.getMinecraft;
-
 import java.util.Iterator;
 
 import javax.annotation.Nullable;
@@ -13,10 +11,11 @@ import com.google.common.primitives.Longs;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.replaymod.core.utils.WrappedTimer;
-import com.replaymod.gui.utils.EventRegistrations;
-import com.replaymod.mixin.MinecraftAccessor;
-import com.replaymod.mixin.TimerAccessor;
+import com.replaymod.core.versions.MCVer;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.EventRegistrations;
 import com.replaymod.replay.ReplayHandler;
+import com.replaymod.replay.mixin.MinecraftAccessor;
+import com.replaymod.replay.mixin.TimerAccessor;
 import com.replaymod.replaystudio.pathing.path.Keyframe;
 import com.replaymod.replaystudio.pathing.path.Path;
 import com.replaymod.replaystudio.pathing.path.Timeline;
@@ -24,123 +23,114 @@ import com.replaymod.replaystudio.pathing.path.Timeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Timer;
 
-/**
- * Plays a timeline.
- */
 public abstract class AbstractTimelinePlayer extends EventRegistrations {
-    private final Minecraft mc = getMinecraft();
-    private final ReplayHandler replayHandler;
-    private Timeline timeline;
-    protected long startOffset;
-    private boolean wasAsyncMode;
-    private long lastTime;
-    private long lastTimestamp;
-    private ListenableFuture<Void> future;
-    private SettableFuture<Void> settableFuture;
+	private final Minecraft mc = MCVer.getMinecraft();
+	private final ReplayHandler replayHandler;
+	private Timeline timeline;
+	protected long startOffset;
+	private boolean wasAsyncMode;
+	private long lastTime;
+	private long lastTimestamp;
+	private ListenableFuture<Void> future;
+	private SettableFuture<Void> settableFuture;
 
-    public AbstractTimelinePlayer(ReplayHandler replayHandler) {
-        this.replayHandler = replayHandler;
-    }
+	public AbstractTimelinePlayer(ReplayHandler replayHandler) {
+		this.on(ReplayTimer.UpdatedCallback.EVENT, this::onTick);
+		this.replayHandler = replayHandler;
+	}
 
-    public ListenableFuture<Void> start(Timeline timeline, long from) {
-        startOffset = from;
-        return start(timeline);
-    }
+	public ListenableFuture<Void> start(Timeline timeline, long from) {
+		this.startOffset = from;
+		return this.start(timeline);
+	}
 
-    public ListenableFuture<Void> start(Timeline timeline) {
-        this.timeline = timeline;
+	public ListenableFuture<Void> start(Timeline timeline) {
+		this.timeline = timeline;
+		Iterator<Keyframe> iter = Iterables
+				.concat(Iterables.transform(timeline.getPaths(), new Function<Path, Iterable<Keyframe>>() {
+					@Nullable
+					public Iterable<Keyframe> apply(@Nullable Path input) {
+						assert input != null;
 
-        Iterator<Keyframe> iter = Iterables.concat(Iterables.transform(timeline.getPaths(),
-                new Function<Path, Iterable<Keyframe>>() {
-            @Nullable
-            @Override
-            public Iterable<Keyframe> apply(@Nullable Path input) {
-                assert input != null;
-                return input.getKeyframes();
-            }
-        })).iterator();
-        if (!iter.hasNext()) {
-            lastTimestamp = 0;
-        } else {
-            lastTimestamp = new Ordering<Keyframe>() {
-                @Override
-                public int compare(@Nullable Keyframe left, @Nullable Keyframe right) {
-                    assert left != null;
-                    assert right != null;
-                    return Longs.compare(left.getTime(), right.getTime());
-                }
-            }.max(iter).getTime();
-        }
+						return input.getKeyframes();
+					}
+				})).iterator();
+		if (!iter.hasNext()) {
+			this.lastTimestamp = 0L;
+		} else {
+			this.lastTimestamp = ((Keyframe) (new Ordering<Keyframe>() {
+				public int compare(@Nullable Keyframe left, @Nullable Keyframe right) {
+					assert left != null;
 
-        wasAsyncMode = replayHandler.getReplaySender().isAsyncMode();
-        replayHandler.getReplaySender().setSyncModeAndWait();
-        register();
-        lastTime = 0;
+					assert right != null;
 
-        MinecraftAccessor mcA = (MinecraftAccessor) mc;
-        ReplayTimer timer = new ReplayTimer(mcA.getTimer());
-        mcA.setTimer(timer);
+					return Longs.compare(left.getTime(), right.getTime());
+				}
+			}).max(iter)).getTime();
+		}
 
-        //noinspection ConstantConditions
-        TimerAccessor timerA = (TimerAccessor) timer;
-        timerA.setTickLength(WrappedTimer.DEFAULT_MS_PER_TICK);
-        timer.partialTick = timer.ticksThisFrame = 0;
-        return future = settableFuture = SettableFuture.create();
-    }
+		this.wasAsyncMode = this.replayHandler.getReplaySender().isAsyncMode();
+		this.replayHandler.getReplaySender().setSyncModeAndWait();
+		this.register();
+		this.lastTime = 0L;
+		MinecraftAccessor mcA = (MinecraftAccessor) this.mc;
+		ReplayTimer timer = new ReplayTimer(mcA.getTimer());
+		mcA.setTimer(timer);
+		TimerAccessor timerA = (TimerAccessor) timer;
+		timerA.setTickLength(WrappedTimer.DEFAULT_MS_PER_TICK);
+		timer.partialTick = (float) (timer.ticksThisFrame = 0);
+		return this.future = this.settableFuture = SettableFuture.create();
+	}
 
-    public ListenableFuture<Void> getFuture() {
-        return future;
-    }
+	public ListenableFuture<Void> getFuture() {
+		return this.future;
+	}
 
-    public boolean isActive() {
-        return future != null && !future.isDone();
-    }
+	public boolean isActive() {
+		return this.future != null && !this.future.isDone();
+	}
 
-    { on(ReplayTimer.UpdatedCallback.EVENT, this::onTick); }
-    public void onTick() {
-        if (future.isDone()) {
-            MinecraftAccessor mcA = (MinecraftAccessor) mc;
-            mcA.setTimer(((ReplayTimer) mcA.getTimer()).getWrapped());
-            replayHandler.getReplaySender().setReplaySpeed(0);
-            if (wasAsyncMode) {
-                replayHandler.getReplaySender().setAsyncMode(true);
-            }
-            unregister();
-            return;
-        }
-        long time = getTimePassed();
-        if (time > lastTimestamp) {
-            time = lastTimestamp;
-        }
+	public void onTick() {
+		if (this.future.isDone()) {
+			MinecraftAccessor mcA = (MinecraftAccessor) this.mc;
+			mcA.setTimer(((ReplayTimer) mcA.getTimer()).getWrapped());
+			this.replayHandler.getReplaySender().setReplaySpeed(0.0D);
+			if (this.wasAsyncMode) {
+				this.replayHandler.getReplaySender().setAsyncMode(true);
+			}
 
-        // Apply to timeline
-        timeline.applyToGame(time, replayHandler);
-        // Apply a second time in case same of the packets have moved the camera from where it was
-        timeline.applyToGame(time, replayHandler);
+			this.unregister();
+		} else {
+			long time = this.getTimePassed();
+			if (time > this.lastTimestamp) {
+				time = this.lastTimestamp;
+			}
 
-        // Update minecraft timer
-        long replayTime = replayHandler.getReplaySender().currentTimeStamp();
-        if (lastTime == 0) {
-            // First frame, no change yet
-            lastTime = replayTime;
-        }
-        float timeInTicks = replayTime / 50f;
-        float previousTimeInTicks = lastTime / 50f;
-        float passedTicks = timeInTicks - previousTimeInTicks;
-        Timer renderTickCounter = ((MinecraftAccessor) mc).getTimer();
-        if (renderTickCounter instanceof ReplayTimer) {
-            ReplayTimer timer = (ReplayTimer) renderTickCounter;
-            timer.partialTick += passedTicks;
-            timer.ticksThisFrame = (int) timer.partialTick;
-            timer.partialTick -= timer.ticksThisFrame;
-        }
+			this.timeline.applyToGame(time, this.replayHandler);
+			this.timeline.applyToGame(time, this.replayHandler);
+			long replayTime = (long) this.replayHandler.getReplaySender().currentTimeStamp();
+			if (this.lastTime == 0L) {
+				this.lastTime = replayTime;
+			}
 
-        lastTime = replayTime;
+			float timeInTicks = (float) replayTime / 50.0F;
+			float previousTimeInTicks = (float) this.lastTime / 50.0F;
+			float passedTicks = timeInTicks - previousTimeInTicks;
+			Timer renderTickCounter = ((MinecraftAccessor) this.mc).getTimer();
+			if (renderTickCounter instanceof ReplayTimer) {
+				ReplayTimer timer = (ReplayTimer) renderTickCounter;
+				timer.partialTick += passedTicks;
+				timer.ticksThisFrame = (int) timer.partialTick;
+				timer.partialTick -= (float) timer.ticksThisFrame;
+			}
 
-        if (time >= lastTimestamp) {
-            settableFuture.set(null);
-        }
-    }
+			this.lastTime = replayTime;
+			if (time >= this.lastTimestamp) {
+				this.settableFuture.set(null);
+			}
 
-    public abstract long getTimePassed();
+		}
+	}
+
+	public abstract long getTimePassed();
 }

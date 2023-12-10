@@ -1,15 +1,21 @@
 package com.replaymod.render.hooks;
 
-import com.replaymod.gui.utils.Event;
+import java.util.Iterator;
+
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.Event;
 
 public interface Texture2DStateCallback {
-    Event<Texture2DStateCallback> EVENT = Event.create((listeners) ->
-            (slot, enabled) -> {
-                for (Texture2DStateCallback listener : listeners) {
-                    listener.texture2DStateChanged(slot, enabled);
-                }
-            }
-    );
+	Event<Texture2DStateCallback> EVENT = Event.create((listeners) -> {
+		return (slot, enabled) -> {
+			Iterator var3 = listeners.iterator();
 
-    void texture2DStateChanged(int slot, boolean enabled);
+			while (var3.hasNext()) {
+				Texture2DStateCallback listener = (Texture2DStateCallback) var3.next();
+				listener.texture2DStateChanged(slot, enabled);
+			}
+
+		};
+	});
+
+	void texture2DStateChanged(int i, boolean bl);
 }

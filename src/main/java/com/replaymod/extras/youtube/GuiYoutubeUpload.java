@@ -1,14 +1,13 @@
 package com.replaymod.extras.youtube;
 
-import static com.replaymod.extras.ReplayModExtras.LOGGER;
-import static java.util.Arrays.asList;
-
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -23,228 +22,234 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.replaymod.core.utils.Utils;
 import com.replaymod.core.versions.MCVer;
-import com.replaymod.gui.GuiRenderer;
-import com.replaymod.gui.RenderInfo;
-import com.replaymod.gui.container.GuiPanel;
-import com.replaymod.gui.container.GuiScreen;
-import com.replaymod.gui.element.GuiTextField;
-import com.replaymod.gui.element.advanced.GuiDropdownMenu;
-import com.replaymod.gui.element.advanced.GuiProgressBar;
-import com.replaymod.gui.element.advanced.GuiTextArea;
-import com.replaymod.gui.layout.CustomLayout;
-import com.replaymod.gui.layout.VerticalLayout;
-import com.replaymod.gui.popup.GuiFileChooserPopup;
-import com.replaymod.gui.versions.Image;
+import com.replaymod.extras.ReplayModExtras;
+import com.replaymod.lib.de.johni0702.minecraft.gui.GuiRenderer;
+import com.replaymod.lib.de.johni0702.minecraft.gui.RenderInfo;
+import com.replaymod.lib.de.johni0702.minecraft.gui.container.GuiPanel;
+import com.replaymod.lib.de.johni0702.minecraft.gui.container.GuiScreen;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiButton;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiElement;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiImage;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiTextField;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiTooltip;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.advanced.GuiDropdownMenu;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.advanced.GuiProgressBar;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.advanced.GuiTextArea;
+import com.replaymod.lib.de.johni0702.minecraft.gui.layout.CustomLayout;
+import com.replaymod.lib.de.johni0702.minecraft.gui.layout.LayoutData;
+import com.replaymod.lib.de.johni0702.minecraft.gui.layout.VerticalLayout;
+import com.replaymod.lib.de.johni0702.minecraft.gui.popup.GuiFileChooserPopup;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
+import com.replaymod.lib.de.johni0702.minecraft.gui.versions.Image;
 import com.replaymod.render.RenderSettings;
 
-import de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
 import joptsimple.internal.Strings;
 import net.minecraft.client.resources.language.I18n;
 
 public class GuiYoutubeUpload extends GuiScreen {
-    private final GuiScreen previousScreen;
-    private final File videoFile;
-    private final int videoFrames;
-    private final RenderSettings settings;
-    private String thumbnailFormat;
-    private byte[] thumbnailImage;
+	private final GuiScreen previousScreen;
+	private final File videoFile;
+	private final int videoFrames;
+	private final RenderSettings settings;
+	private String thumbnailFormat;
+	private byte[] thumbnailImage;
+	public final Runnable inputValidation = new Runnable() {
+		public void run() {
+			String problem = null;
+			if (GuiYoutubeUpload.this.nameField.getText().isEmpty()) {
+				problem = "replaymod.gui.titleempty";
+			}
 
-    public final Runnable inputValidation = new Runnable() {
-        @Override
-        public void run() {
-            String problem = null;
+			if (GuiYoutubeUpload.this.thumbnailImage != null) {
+				if (GuiYoutubeUpload.this.thumbnailImage.length > 2097152) {
+					problem = "replaymod.gui.videothumbnailtoolarge";
+				}
 
-            if (nameField.getText().isEmpty()) problem = "replaymod.gui.titleempty";
-            if (thumbnailImage != null) {
-                if (thumbnailImage.length > 1024 * 1024 * 2) problem = "replaymod.gui.videothumbnailtoolarge";
-                if (!asList("jpeg", "png").contains(thumbnailFormat)) problem = "replaymod.gui.videothumbnailformat";
-            }
+				if (!Arrays.asList("jpeg", "png").contains(GuiYoutubeUpload.this.thumbnailFormat)) {
+					problem = "replaymod.gui.videothumbnailformat";
+				}
+			}
 
-            if (upload == null) {
-                if (problem == null) {
-                    uploadButton.setEnabled();
-                    uploadButton.setTooltip(null);
-                } else {
-                    uploadButton.setDisabled();
-                    uploadButton.setTooltip(new com.replaymod.gui.element.GuiTooltip().setI18nText(problem));
-                }
-            }
-        }
-    };
+			if (GuiYoutubeUpload.this.upload == null) {
+				if (problem == null) {
+					GuiYoutubeUpload.this.uploadButton.setEnabled();
+					GuiYoutubeUpload.this.uploadButton.setTooltip((GuiElement) null);
+				} else {
+					GuiYoutubeUpload.this.uploadButton.setDisabled();
+					GuiYoutubeUpload.this.uploadButton
+							.setTooltip((new GuiTooltip()).setI18nText(problem, new Object[0]));
+				}
+			}
 
-    public final com.replaymod.gui.element.GuiTextField nameField = new com.replaymod.gui.element.GuiTextField().setI18nHint("replaymod.gui.videotitle")
-            .onTextChanged(s -> inputValidation.run());
+		}
+	};
+	public final GuiTextField nameField = (GuiTextField) ((GuiTextField) (new GuiTextField())
+			.setI18nHint("replaymod.gui.videotitle", new Object[0])).onTextChanged((s) -> {
+				this.inputValidation.run();
+			});
+	public final GuiTextArea descriptionField = (GuiTextArea) ((GuiTextArea) ((GuiTextArea) (new GuiTextArea())
+			.setMaxCharCount(Integer.MAX_VALUE)).setMaxTextWidth(Integer.MAX_VALUE))
+			.setMaxTextHeight(Integer.MAX_VALUE);
+	public final GuiTextField tagsField;
+	public final GuiProgressBar progressBar;
+	public final GuiPanel leftPanel;
+	public final GuiDropdownMenu<VideoVisibility> visibilityDropdown;
+	public final GuiButton thumbnailButton;
+	public final GuiImage thumbnail;
+	public final GuiButton uploadButton;
+	public final GuiButton closeButton;
+	public final GuiPanel rightPanel;
+	private YoutubeUploader upload;
 
-    public final GuiTextArea descriptionField = new GuiTextArea().setMaxCharCount(Integer.MAX_VALUE)
-            .setMaxTextWidth(Integer.MAX_VALUE).setMaxTextHeight(Integer.MAX_VALUE);
+	public GuiYoutubeUpload(GuiScreen previousScreen, File videoFile, int videoFrames, RenderSettings settings) {
+		this.descriptionField.setText(new String[] { I18n.get("replaymod.gui.videodescription", new Object[0]) });
+		this.tagsField = (GuiTextField) (new GuiTextField()).setI18nHint("replaymod.gui.videotags", new Object[0]);
+		((GuiTextField) this.nameField.setNext(this.descriptionField)).getNext().setNext(this.tagsField).getNext()
+				.setNext(this.nameField);
+		this.progressBar = new GuiProgressBar();
+		this.leftPanel = (GuiPanel) ((GuiPanel) (new GuiPanel(this)).setLayout(new CustomLayout<GuiPanel>() {
+			protected void layout(GuiPanel container, int width, int height) {
+				this.size(GuiYoutubeUpload.this.nameField, width, 20);
+				this.size(GuiYoutubeUpload.this.descriptionField, width, height - 90);
+				this.size(GuiYoutubeUpload.this.tagsField, width, 20);
+				this.size(GuiYoutubeUpload.this.progressBar, width, 20);
+				this.pos(GuiYoutubeUpload.this.nameField, 0, 0);
+				this.pos(GuiYoutubeUpload.this.descriptionField, 0, 30);
+				this.pos(GuiYoutubeUpload.this.tagsField, 0, height - 50);
+				this.pos(GuiYoutubeUpload.this.progressBar, 0, height - 20);
+			}
+		})).addElements((LayoutData) null,
+				new GuiElement[] { this.nameField, this.descriptionField, this.tagsField, this.progressBar });
+		this.visibilityDropdown = (GuiDropdownMenu) ((GuiDropdownMenu) ((GuiDropdownMenu) (new GuiDropdownMenu())
+				.setSize(200, 20)).setValues(VideoVisibility.values())).setSelected(VideoVisibility.PUBLIC);
+		this.thumbnailButton = (GuiButton) ((GuiButton) ((GuiButton) (new GuiButton()).onClick(new Runnable() {
+			public void run() {
+				GuiFileChooserPopup
+						.openLoadGui(GuiYoutubeUpload.this, "replaymod.gui.load", ImageIO.getReaderFileSuffixes())
+						.onAccept((file) -> {
+							GuiYoutubeUpload.this.thumbnailButton.setLabel(file.getName());
 
-    {
-        descriptionField.setText(new String[]{I18n.get("replaymod.gui.videodescription")});
-    }
+							Image image;
+							try {
+								GuiYoutubeUpload.this.thumbnailImage = IOUtils.toByteArray(new FileInputStream(file));
+								ImageInputStream in = ImageIO.createImageInputStream(
+										new ByteArrayInputStream(GuiYoutubeUpload.this.thumbnailImage));
+								ImageReader reader = (ImageReader) ImageIO.getImageReaders(in).next();
+								GuiYoutubeUpload.this.thumbnailFormat = reader.getFormatName().toLowerCase();
+								image = Image.read(
+										(InputStream) (new ByteArrayInputStream(GuiYoutubeUpload.this.thumbnailImage)));
+							} catch (Throwable var5) {
+								var5.printStackTrace();
+								GuiYoutubeUpload.this.thumbnailImage = null;
+								image = null;
+							}
 
-    public final com.replaymod.gui.element.GuiTextField tagsField = new GuiTextField().setI18nHint("replaymod.gui.videotags");
+							GuiYoutubeUpload.this.thumbnail.setTexture(image);
+							GuiYoutubeUpload.this.inputValidation.run();
+						});
+			}
+		})).setSize(200, 20)).setI18nLabel("replaymod.gui.videothumbnail", new Object[0]);
+		this.thumbnail = (GuiImage) ((GuiImage) (new GuiImage()).setSize(200, 112)).setTexture(Utils.DEFAULT_THUMBNAIL);
+		this.uploadButton = (GuiButton) (new GuiButton(this)).setSize(98, 20);
+		this.closeButton = (GuiButton) ((GuiButton) ((GuiButton) (new GuiButton(this)).onClick(new Runnable() {
+			public void run() {
+				GuiYoutubeUpload.this.previousScreen.display();
+			}
+		})).setSize(98, 20)).setI18nLabel("replaymod.gui.back", new Object[0]);
+		this.rightPanel = (GuiPanel) ((GuiPanel) (new GuiPanel(this)).addElements((LayoutData) null,
+				new GuiElement[] { this.visibilityDropdown, this.thumbnailButton, this.thumbnail }))
+				.setLayout((new VerticalLayout(VerticalLayout.Alignment.TOP)).setSpacing(10));
+		this.setLayout(new CustomLayout<GuiScreen>() {
+			protected void layout(GuiScreen container, int width, int height) {
+				this.pos(GuiYoutubeUpload.this.leftPanel, 10, 10);
+				this.size(GuiYoutubeUpload.this.leftPanel, width - 200 - 30, height - 20);
+				this.pos(GuiYoutubeUpload.this.rightPanel, width - 210, 10);
+				this.pos(GuiYoutubeUpload.this.uploadButton, width - 210, height - 30);
+				this.pos(GuiYoutubeUpload.this.closeButton, width - 108, height - 30);
+			}
+		});
+		this.setState(false);
+		this.inputValidation.run();
+		this.previousScreen = previousScreen;
+		this.videoFile = videoFile;
+		this.videoFrames = videoFrames;
+		this.settings = settings;
+	}
 
-    {
-        nameField.setNext(descriptionField)
-                .getNext().setNext(tagsField)
-                .getNext().setNext(nameField);
-    }
+	private void setState(boolean uploading) {
+		this.invokeAll(GuiElement.class, (e) -> {
+			e.setEnabled(!uploading);
+		});
+		this.uploadButton.setEnabled();
+		if (uploading) {
+			((GuiButton) this.uploadButton.onClick(() -> {
+				this.setState(false);
+				(new Thread(() -> {
+					try {
+						this.upload.cancel();
+					} catch (InterruptedException var2) {
+						var2.printStackTrace();
+					}
 
-    public final GuiProgressBar progressBar = new GuiProgressBar();
+				})).start();
+			})).setI18nLabel("replaymod.gui.cancel", new Object[0]);
+		} else {
+			((GuiButton) this.uploadButton.onClick(() -> {
+				try {
+					this.setState(true);
+					VideoVisibility visibility = (VideoVisibility) this.visibilityDropdown.getSelectedValue();
+					VideoSnippet snippet = new VideoSnippet();
+					snippet.setTitle(this.nameField.getText());
+					snippet.setDescription(Strings.join(this.descriptionField.getText(), "\n"));
+					snippet.setTags(Arrays.asList(this.tagsField.getText().split(",")));
+					this.upload = new YoutubeUploader(this.getMinecraft(), this.videoFile, this.videoFrames,
+							this.thumbnailFormat, this.thumbnailImage, this.settings, visibility, snippet);
+					ListenableFuture<Video> future = this.upload.upload();
+					Futures.addCallback(future, new FutureCallback<Video>() {
+						public void onSuccess(Video result) {
+							String url = "https://youtu.be/" + result.getId();
 
-    public final GuiPanel leftPanel = new GuiPanel(this).setLayout(new CustomLayout<GuiPanel>() {
-        @Override
-        protected void layout(GuiPanel container, int width, int height) {
-            size(nameField, width, 20);
-            size(descriptionField, width, height - 90);
-            size(tagsField, width, 20);
-            size(progressBar, width, 20);
+							try {
+								MCVer.openURL((new URL(url)).toURI());
+							} catch (Throwable var4) {
+								ReplayModExtras.LOGGER.error("Failed to open video URL \"{}\":", url, var4);
+							}
 
-            pos(nameField, 0, 0);
-            pos(descriptionField, 0, 30);
-            pos(tagsField, 0, height - 50);
-            pos(progressBar, 0, height - 20);
-        }
-    }).addElements(null, nameField, descriptionField, tagsField, progressBar);
+							GuiYoutubeUpload.this.upload = null;
+							GuiYoutubeUpload.this.progressBar
+									.setLabel(I18n.get("replaymod.gui.ytuploadprogress.done", new Object[] { url }));
+							GuiYoutubeUpload.this.setState(false);
+						}
 
-    public final GuiDropdownMenu<VideoVisibility> visibilityDropdown = new GuiDropdownMenu<VideoVisibility>()
-            .setSize(200, 20).setValues(VideoVisibility.values()).setSelected(VideoVisibility.PUBLIC);
+						public void onFailure(Throwable t) {
+							if (!(t instanceof InterruptedException) && !GuiYoutubeUpload.this.upload.isCancelled()) {
+								t.printStackTrace();
+								GuiYoutubeUpload.this.progressBar.setLabel(t.getLocalizedMessage());
+							} else {
+								GuiYoutubeUpload.this.progressBar.setProgress(0.0F);
+								GuiYoutubeUpload.this.progressBar.setLabel("%d%%");
+							}
 
-    public final com.replaymod.gui.element.GuiButton thumbnailButton = new com.replaymod.gui.element.GuiButton().onClick(new Runnable() {
-        @Override
-        public void run() {
-            GuiFileChooserPopup.openLoadGui(
-                    GuiYoutubeUpload.this,
-                    "replaymod.gui.load",
-                    ImageIO.getReaderFileSuffixes()
-            ).onAccept(file -> {
-                thumbnailButton.setLabel(file.getName());
-                Image image;
-                try {
-                    thumbnailImage = IOUtils.toByteArray(new FileInputStream(file));
-                    ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(thumbnailImage));
-                    ImageReader reader = ImageIO.getImageReaders(in).next();
-                    thumbnailFormat = reader.getFormatName().toLowerCase();
-                    image = Image.read(new ByteArrayInputStream(thumbnailImage));
-                } catch (Throwable t) {
-                    t.printStackTrace();
-                    thumbnailImage = null;
-                    image = null;
-                }
-                thumbnail.setTexture(image);
-                inputValidation.run();
-            });
-        }
-    }).setSize(200, 20).setI18nLabel("replaymod.gui.videothumbnail");
+							GuiYoutubeUpload.this.upload = null;
+							GuiYoutubeUpload.this.setState(false);
+						}
+					}, Runnable::run);
+				} catch (IOException | GeneralSecurityException var4) {
+					var4.printStackTrace();
+				}
 
-    public final com.replaymod.gui.element.GuiImage thumbnail = new com.replaymod.gui.element.GuiImage().setSize(200, 112).setTexture(Utils.DEFAULT_THUMBNAIL);
+			})).setI18nLabel("replaymod.gui.upload", new Object[0]);
+		}
 
-    public final com.replaymod.gui.element.GuiButton uploadButton = new com.replaymod.gui.element.GuiButton(this).setSize(98, 20);
+	}
 
-    public final com.replaymod.gui.element.GuiButton closeButton = new com.replaymod.gui.element.GuiButton(this).onClick(new Runnable() {
-        @Override
-        public void run() {
-            previousScreen.display();
-        }
-    }).setSize(98, 20).setI18nLabel("replaymod.gui.back");
+	public void draw(GuiRenderer renderer, ReadableDimension size, RenderInfo renderInfo) {
+		if (this.upload != null && this.upload.getState() != null) {
+			this.progressBar.setProgress((float) this.upload.getProgress());
+			this.progressBar.setI18nLabel(
+					"replaymod.gui.ytuploadprogress." + this.upload.getState().name().toLowerCase(), new Object[0]);
+		}
 
-    public final GuiPanel rightPanel = new GuiPanel(this)
-            .addElements(null, visibilityDropdown, thumbnailButton, thumbnail)
-            .setLayout(new VerticalLayout(VerticalLayout.Alignment.TOP).setSpacing(10));
-
-    private YoutubeUploader upload;
-
-    {
-        setLayout(new CustomLayout<GuiScreen>() {
-            @Override
-            protected void layout(GuiScreen container, int width, int height) {
-                pos(leftPanel, 10, 10);
-                size(leftPanel, width - 200 - 30, height - 20);
-
-                pos(rightPanel, width - 210, 10);
-                pos(uploadButton, width - 210, height - 30);
-                pos(closeButton, width - 108, height - 30);
-            }
-        });
-
-        setState(false);
-        inputValidation.run();
-    }
-
-    public GuiYoutubeUpload(GuiScreen previousScreen, File videoFile, int videoFrames, RenderSettings settings) {
-        this.previousScreen = previousScreen;
-        this.videoFile = videoFile;
-        this.videoFrames = videoFrames;
-        this.settings = settings;
-    }
-
-    private void setState(boolean uploading) {
-        invokeAll(com.replaymod.gui.element.GuiElement.class, e -> e.setEnabled(!uploading));
-        uploadButton.setEnabled();
-        if (uploading) {
-            uploadButton.onClick(() -> {
-                setState(false);
-                new Thread(() -> {
-                    try {
-                        upload.cancel();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }).start();
-            }).setI18nLabel("replaymod.gui.cancel");
-        } else {
-            uploadButton.onClick(() -> {
-                try {
-                    setState(true);
-
-                    VideoVisibility visibility = visibilityDropdown.getSelectedValue();
-                    VideoSnippet snippet = new VideoSnippet();
-                    snippet.setTitle(nameField.getText());
-                    snippet.setDescription(Strings.join(descriptionField.getText(), "\n"));
-                    snippet.setTags(asList(tagsField.getText().split(",")));
-                    upload = new YoutubeUploader(getMinecraft(), videoFile, videoFrames,
-                            thumbnailFormat, thumbnailImage, settings, visibility, snippet);
-                    ListenableFuture<Video> future = upload.upload();
-                    Futures.addCallback(future, new FutureCallback<Video>() {
-                        @Override
-                        public void onSuccess(Video result) {
-                            String url = "https://youtu.be/" + result.getId();
-                            try {
-                                MCVer.openURL(new URL(url).toURI());
-                            } catch (Throwable throwable) {
-                                LOGGER.error("Failed to open video URL \"{}\":", url, throwable);
-                            }	
-                            upload = null;
-                            progressBar.setLabel(I18n.get("replaymod.gui.ytuploadprogress.done", url));
-                            setState(false);
-                        }
-
-                        @Override
-                        public void onFailure(Throwable t) {
-                            if (t instanceof InterruptedException || upload.isCancelled()) {
-                                progressBar.setProgress(0);
-                                progressBar.setLabel("%d%%");
-                            } else {
-                                t.printStackTrace();
-                                progressBar.setLabel(t.getLocalizedMessage());
-                            }
-                            upload = null;
-                            setState(false);
-                        }
-                    }, Runnable::run);
-                } catch (GeneralSecurityException | IOException e) {
-                    e.printStackTrace();
-                }
-            }).setI18nLabel("replaymod.gui.upload");
-        }
-    }
-
-    @Override
-    public void draw(GuiRenderer renderer, ReadableDimension size, RenderInfo renderInfo) {
-        if (upload != null && upload.getState() != null) {
-            progressBar.setProgress((float) upload.getProgress());
-            progressBar.setI18nLabel("replaymod.gui.ytuploadprogress." + upload.getState().name().toLowerCase());
-        }
-        super.draw(renderer, size, renderInfo);
-    }
+		super.draw(renderer, size, renderInfo);
+	}
 }

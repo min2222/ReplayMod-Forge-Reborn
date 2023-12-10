@@ -1,44 +1,47 @@
 package com.replaymod.render.capturer;
 
-import com.replaymod.render.frame.CubicOpenGlFrame;
-import com.replaymod.render.rendering.Channel;
-
 import java.util.Collections;
 import java.util.Map;
 
+import com.replaymod.render.frame.CubicOpenGlFrame;
+import com.replaymod.render.rendering.Channel;
+
 public class CubicOpenGlFrameCapturer extends OpenGlFrameCapturer<CubicOpenGlFrame, CubicOpenGlFrameCapturer.Data> {
-    public enum Data implements CaptureData {
-        LEFT, RIGHT, FRONT, BACK, TOP, BOTTOM
-    }
+	private final int frameSize;
 
-    private final int frameSize;
+	public CubicOpenGlFrameCapturer(WorldRenderer worldRenderer, RenderInfo renderInfo, int frameSize) {
+		super(worldRenderer, renderInfo);
+		this.frameSize = frameSize;
+		worldRenderer.setOmnidirectional(true);
+	}
 
-    public CubicOpenGlFrameCapturer(WorldRenderer worldRenderer, RenderInfo renderInfo, int frameSize) {
-        super(worldRenderer, renderInfo);
-        this.frameSize = frameSize;
-        worldRenderer.setOmnidirectional(true);
-    }
+	protected int getFrameWidth() {
+		return this.frameSize;
+	}
 
-    @Override
-    protected int getFrameWidth() {
-        return frameSize;
-    }
+	protected int getFrameHeight() {
+		return this.frameSize;
+	}
 
-    @Override
-    protected int getFrameHeight() {
-        return frameSize;
-    }
+	public Map<Channel, CubicOpenGlFrame> process() {
+		float partialTicks = this.renderInfo.updateForNextFrame();
+		int frameId = this.framesDone++;
+		CubicOpenGlFrame frame = new CubicOpenGlFrame(
+				this.renderFrame(frameId, partialTicks, CubicOpenGlFrameCapturer.Data.LEFT),
+				this.renderFrame(frameId, partialTicks, CubicOpenGlFrameCapturer.Data.RIGHT),
+				this.renderFrame(frameId, partialTicks, CubicOpenGlFrameCapturer.Data.FRONT),
+				this.renderFrame(frameId, partialTicks, CubicOpenGlFrameCapturer.Data.BACK),
+				this.renderFrame(frameId, partialTicks, CubicOpenGlFrameCapturer.Data.TOP),
+				this.renderFrame(frameId, partialTicks, CubicOpenGlFrameCapturer.Data.BOTTOM));
+		return Collections.singletonMap(Channel.BRGA, frame);
+	}
 
-    @Override
-    public Map<Channel, CubicOpenGlFrame> process() {
-        float partialTicks = renderInfo.updateForNextFrame();
-        int frameId = framesDone++;
-        CubicOpenGlFrame frame = new CubicOpenGlFrame(renderFrame(frameId, partialTicks, Data.LEFT),
-                renderFrame(frameId, partialTicks, Data.RIGHT),
-                renderFrame(frameId, partialTicks, Data.FRONT),
-                renderFrame(frameId, partialTicks, Data.BACK),
-                renderFrame(frameId, partialTicks, Data.TOP),
-                renderFrame(frameId, partialTicks, Data.BOTTOM));
-        return Collections.singletonMap(Channel.BRGA, frame);
-    }
+	public static enum Data implements CaptureData {
+		LEFT, RIGHT, FRONT, BACK, TOP, BOTTOM;
+
+		// $FF: synthetic method
+		private static CubicOpenGlFrameCapturer.Data[] $values() {
+			return new CubicOpenGlFrameCapturer.Data[] { LEFT, RIGHT, FRONT, BACK, TOP, BOTTOM };
+		}
+	}
 }

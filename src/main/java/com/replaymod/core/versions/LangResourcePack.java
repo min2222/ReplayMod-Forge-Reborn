@@ -27,6 +27,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.AbstractPackResources;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.ResourcePackFileNotFoundException;
+import net.minecraftforge.fml.ModContainer;
+import net.minecraftforge.fml.ModList;
 
 
 /**
@@ -47,7 +49,9 @@ public class LangResourcePack extends AbstractPackResources {
     public LangResourcePack() {
         super(new File(NAME));
 
-        this.basePath = null; // stub
+        //this.basePath = null;
+        ModContainer container = ModList.get().getModContainerById(ReplayMod.MOD_ID).orElseThrow(IllegalAccessError::new);
+        this.basePath = container.getModInfo().getOwningFile().getFile().getFilePath();
     }
 
     private String langName(String path) {

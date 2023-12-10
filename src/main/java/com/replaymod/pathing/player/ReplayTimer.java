@@ -1,54 +1,42 @@
 package com.replaymod.pathing.player;
 
 import com.replaymod.core.utils.WrappedTimer;
-import com.replaymod.gui.utils.Event;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.Event;
 
 import net.minecraft.client.Timer;
 
-/**
- * Wrapper around the current timer that prevents the timer from advancing by itself.
- */
 public class ReplayTimer extends WrappedTimer {
-    private final Timer state = new Timer(0, 0);
+	private final Timer state = new Timer(0.0F, 0L);
+	public int ticksThisFrame;
 
-    public int ticksThisFrame;
+	public ReplayTimer(Timer wrapped) {
+		super(wrapped);
+	}
 
-    public ReplayTimer(Timer wrapped) {
-        super(wrapped);
-    }
+	public int advanceTime(long sysClock) {
+		this.copy(this, this.state);
 
-    @Override
-    // This should be handled by Remap but it isn't (was handled before a9724e3).
-    public int
-    advanceTime(
-            long sysClock
-    ) {
-        copy(this, state); // Save our current state
-        try {
-            ticksThisFrame =
-                    wrapped.advanceTime(
-                            sysClock
-                    ); // Update current state
-        } finally {
-            copy(state, this); // Restore our old state
-            UpdatedCallback.EVENT.invoker().onUpdate();
-        }
-        return ticksThisFrame;
-    }
+		try {
+			this.ticksThisFrame = this.wrapped.advanceTime(sysClock);
+		} finally {
+			this.copy(this.state, this);
+			((ReplayTimer.UpdatedCallback) ReplayTimer.UpdatedCallback.EVENT.invoker()).onUpdate();
+		}
 
-    public Timer getWrapped() {
-        return wrapped;
-    }
+		return this.ticksThisFrame;
+	}
 
-    public interface UpdatedCallback {
-        Event<UpdatedCallback> EVENT = Event.create((listeners) ->
-                () -> {
-                    for (UpdatedCallback listener : listeners) {
-                        listener.onUpdate();
-                    }
-                }
-        );
+	public Timer getWrapped() {
+		return this.wrapped;
+	}
 
-        void onUpdate();
-    }
+	public interface UpdatedCallback {
+		Event<UpdatedCallback> EVENT = Event.create((listeners) -> () -> {
+			for (UpdatedCallback listener : listeners) {
+				listener.onUpdate();
+			}
+		});
+
+		void onUpdate();
+	}
 }

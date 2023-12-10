@@ -1,184 +1,189 @@
 package com.replaymod.replay.camera;
 
-import de.johni0702.minecraft.gui.utils.lwjgl.vector.Vector3f;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.vector.Vector3f;
+
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 
-// TODO: Marius is responsible for this. Please, someone clean it up.
 public class ClassicCameraController implements CameraController {
-    private static final double SPEED_CHANGE = 0.5;
-    private static final double LOWER_SPEED = 2;
-    private static final double UPPER_SPEED = 20;
+	private static final double LOWER_SPEED = 0.2D;
+	private static final double UPPER_SPEED = 200.0D;
+	private static final double SPEED_CHANGE = 0.00999D;
+	private final CameraEntity camera;
+	private double MAX_SPEED = 10.0D;
+	private double THRESHOLD;
+	private double DECAY;
+	private Vector3f direction;
+	private Vector3f dirBefore;
+	private double motion;
+	private long lastCall;
+	private boolean speedup;
 
-    private final CameraEntity camera;
+	public ClassicCameraController(CameraEntity camera) {
+		this.THRESHOLD = this.MAX_SPEED / 20.0D;
+		this.DECAY = this.MAX_SPEED / 3.0D;
+		this.lastCall = System.currentTimeMillis();
+		this.speedup = false;
+		this.camera = camera;
+	}
 
-    private double MAX_SPEED = 10;
-    private double THRESHOLD = MAX_SPEED / 20;
-    private double DECAY = MAX_SPEED / 3;
+	public void update(float partialTicksPassed) {
+		boolean forward = false;
+		boolean backward = false;
+		boolean left = false;
+		boolean right = false;
+		boolean up = false;
+		boolean down = false;
+		this.speedup = false;
+		KeyMapping[] var8 = Minecraft.getInstance().options.keyMappings;
+		int var9 = var8.length;
 
-    private Vector3f direction;
-    private Vector3f dirBefore;
-    private double motion;
-    private long lastCall = System.currentTimeMillis();
+		for (int var10 = 0; var10 < var9; ++var10) {
+			KeyMapping kb = var8[var10];
+			if (kb.isDown()) {
+				if (kb.getName().equals("key.forward")) {
+					forward = true;
+					this.speedup = true;
+				}
 
-    private boolean speedup = false;
+				if (kb.getName().equals("key.back")) {
+					backward = true;
+					this.speedup = true;
+				}
 
-    public ClassicCameraController(CameraEntity camera) {
-        this.camera = camera;
-    }
+				if (kb.getName().equals("key.jump")) {
+					up = true;
+					this.speedup = true;
+				}
 
-    @Override
-    public void update(float partialTicksPassed) {
-        boolean forward = false, backward = false, left = false, right = false, up = false, down = false;
-        speedup = false;
-        for (KeyMapping kb : Minecraft.getInstance().options.keyMappings) {
-            if (!kb.isDown()) continue;
-            if (kb.getName().equals("key.forward")) {
-                forward = true;
-                speedup = true;
-            }
+				if (kb.getName().equals("key.left")) {
+					left = true;
+					this.speedup = true;
+				}
 
-            if (kb.getName().equals("key.back")) {
-                backward = true;
-                speedup = true;
-            }
+				if (kb.getName().equals("key.right")) {
+					right = true;
+					this.speedup = true;
+				}
 
-            if (kb.getName().equals("key.jump")) {
-                up = true;
-                speedup = true;
-            }
+				if (kb.getName().equals("key.sneak")) {
+					down = true;
+					this.speedup = true;
+				}
+			}
+		}
 
-            if (kb.getName().equals("key.left")) {
-                left = true;
-                speedup = true;
-            }
+		this.forwardCameraMovement(forward, backward, left, right, up, down);
+		this.updateMovement();
+	}
 
-            if (kb.getName().equals("key.right")) {
-                right = true;
-                speedup = true;
-            }
+	public void increaseSpeed() {
+		this.setCameraMaximumSpeed(this.MAX_SPEED + 0.00999D);
+	}
 
-            if (kb.getName().equals("key.sneak")) {
-                down = true;
-                speedup = true;
-            }
-        }
+	public void decreaseSpeed() {
+		this.setCameraMaximumSpeed(this.MAX_SPEED - 0.00999D);
+	}
 
-        forwardCameraMovement(forward, backward, left, right, up, down);
-        updateMovement();
-    }
+	private void setCameraMaximumSpeed(double maxSpeed) {
+		if (!(maxSpeed < 0.2D) && !(maxSpeed > 200.0D)) {
+			this.MAX_SPEED = maxSpeed;
+			this.THRESHOLD = this.MAX_SPEED / 20.0D;
+			this.DECAY = 5.0D;
+		}
+	}
 
-    @Override
-    public void increaseSpeed() {
-        setCameraMaximumSpeed(MAX_SPEED + SPEED_CHANGE);
-    }
+	private void forwardCameraMovement(boolean forward, boolean backward, boolean left, boolean right, boolean up,
+			boolean down) {
+		if (forward && !backward) {
+			this.setMovement(ClassicCameraController.MoveDirection.FORWARD);
+		} else if (backward && !forward) {
+			this.setMovement(ClassicCameraController.MoveDirection.BACKWARD);
+		}
 
-    @Override
-    public void decreaseSpeed() {
-        setCameraMaximumSpeed(MAX_SPEED - SPEED_CHANGE);
-    }
+		if (left && !right) {
+			this.setMovement(ClassicCameraController.MoveDirection.LEFT);
+		} else if (right && !left) {
+			this.setMovement(ClassicCameraController.MoveDirection.RIGHT);
+		}
 
-    private void setCameraMaximumSpeed(double maxSpeed) {
-        if (maxSpeed < LOWER_SPEED || maxSpeed > UPPER_SPEED) return;
-        MAX_SPEED = maxSpeed;
-        THRESHOLD = MAX_SPEED / 20;
-        DECAY = 5;
-    }
+		if (up && !down) {
+			this.setMovement(ClassicCameraController.MoveDirection.UP);
+		} else if (down && !up) {
+			this.setMovement(ClassicCameraController.MoveDirection.DOWN);
+		}
 
-    private void forwardCameraMovement(boolean forward, boolean backward, boolean left, boolean right, boolean up, boolean down) {
-        if (forward && !backward) {
-            setMovement(MoveDirection.FORWARD);
-        } else if (backward && !forward) {
-            setMovement(MoveDirection.BACKWARD);
-        }
+	}
 
-        if (left && !right) {
-            setMovement(MoveDirection.LEFT);
-        } else if (right && !left) {
-            setMovement(MoveDirection.RIGHT);
-        }
+	private void updateMovement() {
+		long frac = System.currentTimeMillis() - this.lastCall;
+		if (frac != 0L) {
+			double decFac = Math.max(0.0D, 1.0D - this.DECAY * ((double) frac / 1000.0D));
+			if (this.speedup) {
+				if (this.motion < this.THRESHOLD) {
+					this.motion = this.THRESHOLD;
+				}
 
-        if (up && !down) {
-            setMovement(MoveDirection.UP);
-        } else if (down && !up) {
-            setMovement(MoveDirection.DOWN);
-        }
-    }
+				this.motion /= decFac;
+			} else {
+				this.motion *= decFac;
+			}
 
-    private void updateMovement() {
-        long frac = System.currentTimeMillis() - lastCall;
+			this.motion = Math.min(this.motion, this.MAX_SPEED);
+			this.lastCall = System.currentTimeMillis();
+			if (this.direction != null && this.direction.lengthSquared() != 0.0F && !(this.motion < this.THRESHOLD)) {
+				Vector3f movement = this.direction.normalise((Vector3f) null);
+				double factor = this.motion * ((double) frac / 1000.0D);
+				this.camera.moveCamera((double) movement.x * factor, (double) movement.y * factor,
+						(double) movement.z * factor);
+			}
+		}
+	}
 
-        if (frac == 0) return;
+	private void setMovement(ClassicCameraController.MoveDirection dir) {
+		float rotationPitch = this.camera.getXRot();
+		float rotationYaw = this.camera.getYRot();
+		switch (dir) {
+		case BACKWARD:
+			this.direction = this.getVectorForRotation(-rotationPitch, rotationYaw - 180.0F);
+			break;
+		case DOWN:
+			this.direction = this.getVectorForRotation(90.0F, 0.0F);
+			break;
+		case FORWARD:
+			this.direction = this.getVectorForRotation(rotationPitch, rotationYaw);
+			break;
+		case LEFT:
+			this.direction = this.getVectorForRotation(0.0F, rotationYaw - 90.0F);
+			break;
+		case RIGHT:
+			this.direction = this.getVectorForRotation(0.0F, rotationYaw + 90.0F);
+			break;
+		case UP:
+			this.direction = this.getVectorForRotation(-90.0F, 0.0F);
+		}
 
-        double decFac = Math.max(0, 1 - (DECAY * (frac / 1000D)));
+		Vector3f dbf = this.direction;
+		if (this.dirBefore != null) {
+			this.dirBefore.normalise(this.dirBefore);
+			Vector3f.add(this.direction, this.dirBefore, this.dirBefore);
+			this.direction = this.dirBefore;
+		}
 
-        if (speedup) {
-            if (motion < THRESHOLD) motion = THRESHOLD;
-            motion /= decFac;
-        } else {
-            motion *= decFac;
-        }
+		this.dirBefore = dbf;
+		this.updateMovement();
+	}
 
-        motion = Math.min(motion, MAX_SPEED);
+	private Vector3f getVectorForRotation(float pitch, float yaw) {
+		float f2 = Mth.cos(-yaw * 0.017453292F - 3.1415927F);
+		float f3 = Mth.sin(-yaw * 0.017453292F - 3.1415927F);
+		float f4 = -Mth.cos(-pitch * 0.017453292F);
+		float f5 = Mth.sin(-pitch * 0.017453292F);
+		return new Vector3f(f3 * f4, f5, f2 * f4);
+	}
 
-        lastCall = System.currentTimeMillis();
-
-        if (direction == null || direction.lengthSquared() == 0 || motion < THRESHOLD) {
-            return;
-        }
-
-        Vector3f movement = direction.normalise(null);
-        double factor = motion * (frac / 1000D);
-
-        camera.moveCamera(movement.x * factor, movement.y * factor, movement.z * factor);
-    }
-
-    private void setMovement(MoveDirection dir) {
-        float rotationPitch = camera.getXRot(), rotationYaw = camera.getYRot();
-        switch (dir) {
-            case BACKWARD:
-                direction = this.getVectorForRotation(-rotationPitch, rotationYaw - 180);
-                break;
-            case DOWN:
-                direction = this.getVectorForRotation(90, 0);
-                break;
-            case FORWARD:
-                direction = this.getVectorForRotation(rotationPitch, rotationYaw);
-                break;
-            case LEFT:
-                direction = this.getVectorForRotation(0, rotationYaw - 90);
-                break;
-            case RIGHT:
-                direction = this.getVectorForRotation(0, rotationYaw + 90);
-                break;
-            case UP:
-                direction = this.getVectorForRotation(-90, 0);
-                break;
-        }
-
-        Vector3f dbf = direction;
-
-        if (dirBefore != null) {
-            dirBefore.normalise(dirBefore);
-            Vector3f.add(direction, dirBefore, dirBefore);
-            direction = dirBefore;
-        }
-
-        dirBefore = dbf;
-
-        updateMovement();
-    }
-
-    private Vector3f getVectorForRotation(float pitch, float yaw) {
-        float f2 = Mth.cos(-yaw * 0.017453292F - (float) Math.PI);
-        float f3 = Mth.sin(-yaw * 0.017453292F - (float) Math.PI);
-        float f4 = -Mth.cos(-pitch * 0.017453292F);
-        float f5 = Mth.sin(-pitch * 0.017453292F);
-        return new Vector3f(f3 * f4, f5, f2 * f4);
-    }
-
-    public enum MoveDirection {
-        UP, DOWN, LEFT, RIGHT, FORWARD, BACKWARD
-    }
+	public enum MoveDirection {
+		UP, DOWN, LEFT, RIGHT, FORWARD, BACKWARD
+	}
 }

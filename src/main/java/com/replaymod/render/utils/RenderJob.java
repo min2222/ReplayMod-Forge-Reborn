@@ -25,108 +25,163 @@ import com.replaymod.replaystudio.replay.ReplayFile;
 import com.replaymod.simplepathing.SPTimeline;
 
 public class RenderJob {
-    private Timeline timeline;
-    private RenderSettings settings;
+	private Timeline timeline;
+	private RenderSettings settings;
 
-    public RenderJob() {
-    }
+	public String getName() {
+		return this.settings.getOutputFile().getName();
+	}
 
-    public String getName() {
-        return settings.getOutputFile().getName();
-    }
+	public Timeline getTimeline() {
+		return this.timeline;
+	}
 
-    public Timeline getTimeline() {
-        return this.timeline;
-    }
+	public RenderSettings getSettings() {
+		return this.settings;
+	}
 
-    public RenderSettings getSettings() {
-        return this.settings;
-    }
+	public void setTimeline(Timeline timeline) {
+		this.timeline = timeline;
+	}
 
-    public void setTimeline(Timeline timeline) {
-        this.timeline = timeline;
-    }
+	public void setSettings(RenderSettings settings) {
+		this.settings = settings;
+	}
 
-    public void setSettings(RenderSettings settings) {
-        this.settings = settings;
-    }
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		} else if (o != null && this.getClass() == o.getClass()) {
+			RenderJob renderJob = (RenderJob) o;
+			return this.timeline.equals(renderJob.timeline) && this.settings.equals(renderJob.settings);
+		} else {
+			return false;
+		}
+	}
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        RenderJob renderJob = (RenderJob) o;
-        return timeline.equals(renderJob.timeline) &&
-                settings.equals(renderJob.settings);
-    }
+	public int hashCode() {
+		return Objects.hash(new Object[] { this.timeline, this.settings });
+	}
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(timeline, settings);
-    }
+	public String toString() {
+		return "RenderJob{timeline=" + this.timeline + ", settings=" + this.settings + "}";
+	}
 
-    @Override
-    public String toString() {
-        return "RenderJob{" +
-                "timeline=" + timeline +
-                ", settings=" + settings +
-                '}';
-    }
+	public static List<RenderJob> readQueue(ReplayFile replayFile) throws IOException {
+		synchronized (replayFile) {
+			Optional<InputStream> optIn = replayFile.get("renderQueue.json");
+			if (!optIn.isPresent()) {
+				return new ArrayList();
+			} else {
+				InputStream in = (InputStream) optIn.get();
 
-    public static List<RenderJob> readQueue(ReplayFile replayFile) throws IOException {
-        synchronized (replayFile) {
-            Optional<InputStream> optIn = replayFile.get("renderQueue.json");
-            if (!optIn.isPresent()) {
-                return new ArrayList<>();
-            }
-            try (InputStream in = optIn.get();
-                 InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
-                return new GsonBuilder()
-                        .registerTypeAdapter(Timeline.class, new TimelineTypeAdapter())
-                        .create()
-                        .fromJson(reader, new TypeToken<List<RenderJob>>() {
-                        }.getType());
-            }
-        }
-    }
+				Object var6;
+				try {
+					InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8);
 
-    public static void writeQueue(ReplayFile replayFile, List<RenderJob> renderQueue) throws IOException {
-        synchronized (replayFile) {
-            try (OutputStream out = replayFile.write("renderQueue.json");
-                 OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
-                new GsonBuilder()
-                        .registerTypeAdapter(Timeline.class, new TimelineTypeAdapter())
-                        .create()
-                        .toJson(renderQueue, writer);
-            }
-        }
-    }
+					try {
+						List<RenderJob> jobs = (List) (new GsonBuilder())
+								.registerTypeAdapter(Timeline.class, new RenderJob.TimelineTypeAdapter()).create()
+								.fromJson(reader, (new TypeToken<List<RenderJob>>() {
+								}).getType());
+						if (jobs == null) {
+							jobs = new ArrayList();
+						}
 
-    private static class TimelineTypeAdapter extends TypeAdapter<Timeline> {
+						var6 = jobs;
+					} catch (Throwable var10) {
+						try {
+							reader.close();
+						} catch (Throwable var9) {
+							var10.addSuppressed(var9);
+						}
 
-        private final TimelineSerialization serialization;
+						throw var10;
+					}
 
-        public TimelineTypeAdapter(TimelineSerialization serialization) {
-            this.serialization = serialization;
-        }
+					reader.close();
+				} catch (Throwable var11) {
+					if (in != null) {
+						try {
+							in.close();
+						} catch (Throwable var8) {
+							var11.addSuppressed(var8);
+						}
+					}
 
-        public TimelineTypeAdapter(PathingRegistry registry) {
-            this(new TimelineSerialization(registry, null));
-        }
+					throw var11;
+				}
 
-        public TimelineTypeAdapter() {
-            // TODO need to somehow get rid of the reliance on simplepathing
-            this(new SPTimeline());
-        }
+				if (in != null) {
+					in.close();
+				}
 
-        @Override
-        public void write(JsonWriter out, Timeline value) throws IOException {
-            out.value(serialization.serialize(Collections.singletonMap("", value)));
-        }
+				return (List) var6;
+			}
+		}
+	}
 
-        @Override
-        public Timeline read(JsonReader in) throws IOException {
-            return serialization.deserialize(in.nextString()).get("");
-        }
-    }
+	public static void writeQueue(ReplayFile replayFile, List<RenderJob> renderQueue) throws IOException {
+		synchronized (replayFile) {
+			OutputStream out = replayFile.write("renderQueue.json");
+
+			try {
+				OutputStreamWriter writer = new OutputStreamWriter(out, StandardCharsets.UTF_8);
+
+				try {
+					(new GsonBuilder()).registerTypeAdapter(Timeline.class, new RenderJob.TimelineTypeAdapter())
+							.create().toJson(renderQueue, writer);
+				} catch (Throwable var10) {
+					try {
+						writer.close();
+					} catch (Throwable var9) {
+						var10.addSuppressed(var9);
+					}
+
+					throw var10;
+				}
+
+				writer.close();
+			} catch (Throwable var11) {
+				if (out != null) {
+					try {
+						out.close();
+					} catch (Throwable var8) {
+						var11.addSuppressed(var8);
+					}
+				}
+
+				throw var11;
+			}
+
+			if (out != null) {
+				out.close();
+			}
+
+		}
+	}
+
+	private static class TimelineTypeAdapter extends TypeAdapter<Timeline> {
+		private final TimelineSerialization serialization;
+
+		public TimelineTypeAdapter(TimelineSerialization serialization) {
+			this.serialization = serialization;
+		}
+
+		public TimelineTypeAdapter(PathingRegistry registry) {
+			this(new TimelineSerialization(registry, (ReplayFile) null));
+		}
+
+		public TimelineTypeAdapter() {
+			this((PathingRegistry) (new SPTimeline()));
+		}
+
+		public void write(JsonWriter out, Timeline value) throws IOException {
+			out.value(this.serialization.serialize(Collections.singletonMap("", value)));
+		}
+
+		public Timeline read(JsonReader in) throws IOException {
+			return (Timeline) this.serialization.deserialize(in.nextString()).get("");
+		}
+	}
 }

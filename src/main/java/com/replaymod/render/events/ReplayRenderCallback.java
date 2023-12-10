@@ -1,28 +1,40 @@
 package com.replaymod.render.events;
 
-import com.replaymod.gui.utils.Event;
+import java.util.Iterator;
+
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.Event;
 import com.replaymod.render.rendering.VideoRenderer;
 
 public interface ReplayRenderCallback {
-    interface Pre {
-        Event<Pre> EVENT = Event.create((listeners) ->
-                (renderer) -> {
-                    for (Pre listener : listeners) {
-                        listener.beforeRendering(renderer);
-                    }
-                });
+	public interface Post {
+		Event<ReplayRenderCallback.Post> EVENT = Event.create((listeners) -> {
+			return (renderer) -> {
+				Iterator var2 = listeners.iterator();
 
-        void beforeRendering(VideoRenderer renderer);
-    }
+				while (var2.hasNext()) {
+					ReplayRenderCallback.Post listener = (ReplayRenderCallback.Post) var2.next();
+					listener.afterRendering(renderer);
+				}
 
-    interface Post {
-        Event<Post> EVENT = Event.create((listeners) ->
-                (renderer) -> {
-                    for (Post listener : listeners) {
-                        listener.afterRendering(renderer);
-                    }
-                });
+			};
+		});
 
-        void afterRendering(VideoRenderer renderer);
-    }
+		void afterRendering(VideoRenderer videoRenderer);
+	}
+
+	public interface Pre {
+		Event<ReplayRenderCallback.Pre> EVENT = Event.create((listeners) -> {
+			return (renderer) -> {
+				Iterator var2 = listeners.iterator();
+
+				while (var2.hasNext()) {
+					ReplayRenderCallback.Pre listener = (ReplayRenderCallback.Pre) var2.next();
+					listener.beforeRendering(renderer);
+				}
+
+			};
+		});
+
+		void beforeRendering(VideoRenderer videoRenderer);
+	}
 }

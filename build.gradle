@@ -11,10 +11,10 @@ buildscript {
         mavenCentral()
         maven { url = "https://plugins.gradle.org/m2/" }
         maven { url = "https://files.minecraftforge.net/maven" }
-        maven { url='https://repo.spongepowered.org/repository/maven-public/' }
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
         maven { url = "https://oss.sonatype.org/content/repositories/snapshots/" }
         maven { url = "https://maven.tterrag.com/" }
-		maven { url 'https://jitpack.io' }
+        maven { url 'https://jitpack.io' }
     }
 
     dependencies {
@@ -23,7 +23,7 @@ buildscript {
         classpath 'com.github.johnrengelman:shadow:7.1.2'
     }
 }
-def mcVersionStr = "${(int)(mcVersion/10000)}.${(int)(mcVersion/100)%100}" + (mcVersion%100==0 ? '' : ".${mcVersion%100}")
+def mcVersionStr = "${(int) (mcVersion / 10000)}.${(int) (mcVersion / 100) % 100}" + (mcVersion % 100 == 0 ? '' : ".${mcVersion % 100}")
 //def jGui = project.evaluationDependsOn(":jGui:1.16.4-forge")
 
 apply plugin: 'net.minecraftforge.gradle'
@@ -52,11 +52,20 @@ mixin {
     add sourceSets.main, "mixins.replaymod.refmap.json"
 }
 
+repositories {
+    maven {
+        url "https://cursemaven.com"
+        content {
+            includeGroup "curse.maven"
+        }
+    }
+}
+
 sourceCompatibility = '17'
 targetCompatibility = '17'
 
 version = project.name + '-' + rootProject.version
-group= "com.replaymod"
+group = "com.replaymod"
 archivesBaseName = "replaymod"
 
 sourceSets {
@@ -106,7 +115,7 @@ minecraft {
             workingDirectory rootProject.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-            jvmArgs ['-Dfml.earlyprogresswindow=false']
+            jvmArgs['-Dfml.earlyprogresswindow=false']
             args '--mod', 'replaymod', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
 
             mods {
@@ -184,9 +193,10 @@ dependencies {
     shadow 'com.github.ReplayMod.JavaBlend:2.79.0:a0696f8'
     shadow "com.github.ReplayMod:ReplayStudio:a1e2b83", shadeExclusions
     shadow 'com.github.ReplayMod:lwjgl-utils:27dcd66'
-    
+
     // FIXME this should be pulled in by ReplayStudio, and IntelliJ sees it, but javac for some reason does not
     implementation 'com.github.viaversion:opennbt:0a02214' // 2.0-SNAPSHOT (ViaVersion Edition)
+    implementation fg.deobf("curse.maven:oculus-581495:4763262")
 
     // implementation(jGui){ transitive = false } // FG 1.2 puts all MC deps into the compile configuration and we don't want to shade those
     testImplementation 'junit:junit:4.11'
@@ -252,7 +262,7 @@ task configureRelocation() {
 
 // tasks.removeByName('shadowJar') // we want to base our shadowed jar on the reobfJar output, not the sourceSet output
 tasks.whenTaskAdded { task ->
-    if(task.name.contains('shadowJar')) {
+    if (task.name.contains('shadowJar')) {
         System.out.println(task + "is disabled")
         task.enabled = false
     }
@@ -319,7 +329,7 @@ processResources {
 
     // strip comments from (strict) JSON files
     filesMatching('pack.mcmeta') {
-        filter { line -> line.trim().startsWith('//') ? '' : line}
+        filter { line -> line.trim().startsWith('//') ? '' : line }
     }
 
     // exclude mod meta for non-applicable loader

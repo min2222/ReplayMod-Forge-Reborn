@@ -1,87 +1,70 @@
 package com.replaymod.extras.advancedscreenshots;
 
-import static com.replaymod.core.versions.MCVer.resizeMainWindow;
-
 import com.mojang.blaze3d.platform.Window;
 import com.replaymod.core.versions.MCVer;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.Dimension;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
 import com.replaymod.render.RenderSettings;
 import com.replaymod.render.blend.BlendState;
 import com.replaymod.render.capturer.RenderInfo;
 import com.replaymod.render.hooks.ForceChunkLoadingHook;
 import com.replaymod.render.rendering.Pipelines;
 
-import de.johni0702.minecraft.gui.utils.lwjgl.Dimension;
-import de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
 import net.minecraft.CrashReport;
 import net.minecraft.client.Minecraft;
 
 public class ScreenshotRenderer implements RenderInfo {
+	private final Minecraft mc = MCVer.getMinecraft();
+	private final RenderSettings settings;
+	private int framesDone;
 
-    private final Minecraft mc = MCVer.getMinecraft();
+	public ScreenshotRenderer(RenderSettings settings) {
+		this.settings = settings;
+	}
 
-    private final RenderSettings settings;
+	public boolean renderScreenshot() throws Throwable {
+		try {
+			Window window = this.mc.getWindow();
+			int widthBefore = window.getWidth();
+			int heightBefore = window.getHeight();
+			ForceChunkLoadingHook clrg = new ForceChunkLoadingHook(this.mc.levelRenderer);
+			if (this.settings.getRenderMethod() == RenderSettings.RenderMethod.BLEND) {
+				BlendState.setState(new BlendState(this.settings.getOutputFile()));
+				Pipelines.newBlendPipeline(this).run();
+			} else {
+				Pipelines.newPipeline(this.settings.getRenderMethod(), this,
+						new ScreenshotWriter(this.settings.getOutputFile())).run();
+			}
 
-    private int framesDone;
+			clrg.uninstall();
+			MCVer.resizeMainWindow(this.mc, widthBefore, heightBefore);
+			return true;
+		} catch (OutOfMemoryError var5) {
+			var5.printStackTrace();
+			CrashReport report = CrashReport.forThrowable(var5, "Creating Equirectangular Screenshot");
+			MCVer.getMinecraft().delayCrashRaw(report);
+			return false;
+		}
+	}
 
-    public ScreenshotRenderer(RenderSettings settings) {
-        this.settings = settings;
-    }
+	public ReadableDimension getFrameSize() {
+		return new Dimension(this.settings.getVideoWidth(), this.settings.getVideoHeight());
+	}
 
-    public boolean renderScreenshot() throws Throwable {
-        try {
-            Window window = mc.getWindow();
-            int widthBefore = window.getWidth();
-            int heightBefore = window.getHeight();
-            boolean hideGUIBefore = mc.options.hideGui;
-            mc.options.hideGui = true;
+	public int getFramesDone() {
+		return this.framesDone;
+	}
 
-            ForceChunkLoadingHook clrg = new ForceChunkLoadingHook(mc.levelRenderer);
+	public int getTotalFrames() {
+		return 2;
+	}
 
-            if (settings.getRenderMethod() == RenderSettings.RenderMethod.BLEND) {
-                BlendState.setState(new BlendState(settings.getOutputFile()));
-                Pipelines.newBlendPipeline(this).run();
-            } else {
-                Pipelines.newPipeline(settings.getRenderMethod(), this,
-                        new ScreenshotWriter(settings.getOutputFile())).run();
-            }
+	public float updateForNextFrame() {
+		++this.framesDone;
+		return this.mc.getPartialTick();
+	}
 
-            clrg.uninstall();
-
-            mc.options.hideGui = hideGUIBefore;
-            resizeMainWindow(mc, widthBefore, heightBefore);
-            return true;
-        } catch (OutOfMemoryError e) {
-            e.printStackTrace();
-            CrashReport report = CrashReport.forThrowable(e, "Creating Equirectangular Screenshot");
-            MCVer.getMinecraft().delayCrashRaw(report);
-        }
-        return false;
-    }
-
-    @Override
-    public ReadableDimension getFrameSize() {
-        return new Dimension(settings.getVideoWidth(), settings.getVideoHeight());
-    }
-
-    @Override
-    public int getFramesDone() {
-        return framesDone;
-    }
-
-    @Override
-    public int getTotalFrames() {
-        // render 2 frames, because only the second contains all frames fully loaded
-        return 2;
-    }
-
-    @Override
-    public float updateForNextFrame() {
-        framesDone++;
-        return mc.getPartialTick();
-    }
-
-    @Override
-    public RenderSettings getRenderSettings() {
-        return settings;
-    }
+	public RenderSettings getRenderSettings() {
+		return this.settings;
+	}
 }

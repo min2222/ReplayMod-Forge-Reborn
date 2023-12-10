@@ -4,21 +4,8 @@
   "mixins": [],
   "server": [],
   "client": [
-    "AddServerScreenAccessor",
-    "EntityLivingBaseAccessor",
-    "IntegratedServerAccessor",
-    "NetworkManagerAccessor",
-    "SPacketSpawnMobAccessor",
-    "SPacketSpawnPlayerAccessor",
-    "MixinServerInfo",
-        "MixinDownloadingPackFinder",
-    "MixinMouseHelper",
-                        "MixinWorldClient",
-                        "MixinNetHandlerLoginClient",
-    "MixinNetHandlerPlayClient",
-                "MixinRenderGlobal"
   ],
-  "compatibilityLevel": "JAVA_17",
+  "compatibilityLevel": "JAVA_8",
   "minVersion": "0.6.11",
   "refmap": "mixins.replaymod.refmap.json"
 }

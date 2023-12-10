@@ -1,18 +1,19 @@
 package com.replaymod.render.blend;
 
-import static com.replaymod.render.ReplayModRender.LOGGER;
-
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 import org.apache.commons.io.output.NullOutputStream;
 import org.blender.utils.BlenderFactory;
 import org.cakelab.blender.io.BlenderFile;
 
+import com.replaymod.render.ReplayModRender;
 import com.replaymod.render.blend.data.DScene;
 import com.replaymod.render.blend.data.Serializer;
 
@@ -20,139 +21,164 @@ import net.minecraft.CrashReport;
 import net.minecraft.CrashReportCategory;
 import net.minecraft.ReportedException;
 
-// Note:
-// - Chunk exporter currently assumes VBO are enabled and in use
 public class BlendState implements Exporter {
-    private static BlendState currentState;
+	private static BlendState currentState;
+	private final List<Exporter> exporters = new ArrayList();
+	private final BlenderFile blenderFile;
+	private final BlenderFactory factory;
+	private final DScene scene = new DScene();
+	private final BlendMaterials materials = new BlendMaterials();
 
-    public static void setState(BlendState state) {
-        currentState = state;
-    }
+	public static void setState(BlendState state) {
+		currentState = state;
+	}
 
-    public static BlendState getState() {
-        return currentState;
-    }
+	public static BlendState getState() {
+		return currentState;
+	}
 
-    private final List<Exporter> exporters = new ArrayList<>();
-    private final BlenderFile blenderFile;
-    private final BlenderFactory factory;
-    private final DScene scene = new DScene();
-    private final BlendMaterials materials = new BlendMaterials();
+	public BlendState(File file) throws IOException {
+		this.blenderFile = BlenderFactory.newBlenderFile(file);
+		this.factory = new BlenderFactory(this.blenderFile);
+	}
 
-    public BlendState(File file) throws IOException {
-        this.blenderFile = BlenderFactory.newBlenderFile(file);
-        this.factory = new BlenderFactory(blenderFile);
-    }
+	public void register(Exporter exporter) {
+		this.exporters.add(exporter);
+	}
 
-    public void register(Exporter exporter) {
-        exporters.add(exporter);
-    }
+	public <T extends Exporter> T get(Class<T> clazz) {
+		Iterator var2 = this.exporters.iterator();
 
-    public <T extends Exporter> T get(Class<T> clazz) {
-        for (Exporter exporter : exporters) {
-            if (clazz.isInstance(exporter)) {
-                return clazz.cast(exporter);
-            }
-        }
-        throw new NoSuchElementException("No exporter of type " + clazz);
-    }
+		Exporter exporter;
+		do {
+			if (!var2.hasNext()) {
+				throw new NoSuchElementException("No exporter of type " + clazz);
+			}
 
-    @Override
-    public void setup() {
-        for (Exporter exporter : exporters) {
-            try {
-                exporter.setup();
-            } catch (IOException e) {
-                CrashReport report = CrashReport.forThrowable(e, "Setup of blend exporter");
-                CrashReportCategory category = report.addCategory("Exporter");
-                category.setDetail("Exporter", exporter::toString);
-                throw new ReportedException(report);
-            }
-        }
-    }
+			exporter = (Exporter) var2.next();
+		} while (!clazz.isInstance(exporter));
 
-    @Override
-    public void tearDown() {
-        for (Exporter exporter : exporters) {
-            try {
-                exporter.tearDown();
-            } catch (IOException e) {
-                CrashReport report = CrashReport.forThrowable(e, "Tear down of blend exporter");
-                CrashReportCategory category = report.addCategory("Exporter");
-                category.setDetail("Exporter", exporter::toString);
-                throw new ReportedException(report);
-            }
-        }
+		return clazz.cast(exporter);
+	}
 
-        try {
-            Serializer serializer = new Serializer();
-            this.scene.serialize(serializer);
-            // TODO pre-configure render settings serializer.writeMajor(new Object(), new DId(BlockCodes.ID_REND))
+	public void setup() {
+		Iterator var1 = this.exporters.iterator();
 
-            //noinspection UseOfSystemOutOrSystemErr
-            PrintStream sysout = System.out;
-            try {
-                System.setOut(new PrintStream(new NullOutputStream()));
-                blenderFile.write();
-            } finally {
-                System.setOut(sysout);
-            }
-        } catch (IOException e) {
-            LOGGER.error("Exception writing blend file: ", e);
-        } finally {
-            try {
-                blenderFile.close();
-            } catch (IOException e) {
-                LOGGER.error("Exception closing blend file: ", e);
-            }
-        }
-    }
+		while (var1.hasNext()) {
+			Exporter exporter = (Exporter) var1.next();
 
-    @Override
-    public void preFrame(int frame) {
-        for (Exporter exporter : exporters) {
-            try {
-                exporter.preFrame(frame);
-            } catch (IOException e) {
-                CrashReport report = CrashReport.forThrowable(e, "Pre frame of blend exporter");
-                CrashReportCategory category = report.addCategory("Exporter");
-                category.setDetail("Exporter", exporter::toString);
-                category.setDetail("Frame", () -> String.valueOf(frame));
-                throw new ReportedException(report);
-            }
-        }
-    }
+			try {
+				exporter.setup();
+			} catch (IOException var6) {
+				CrashReport report = CrashReport.forThrowable(var6, "Setup of blend exporter");
+				CrashReportCategory category = report.addCategory("Exporter");
+				Objects.requireNonNull(exporter);
+				category.setDetail("Exporter", exporter::toString);
+				throw new ReportedException(report);
+			}
+		}
 
-    @Override
-    public void postFrame(int frame) {
-        for (Exporter exporter : exporters) {
-            try {
-                exporter.postFrame(frame);
-            } catch (IOException e) {
-                CrashReport report = CrashReport.forThrowable(e, "Post frame of blend exporter");
-                CrashReportCategory category = report.addCategory("Exporter");
-                category.setDetail("Exporter", exporter::toString);
-                category.setDetail("Frame", () -> String.valueOf(frame));
-                throw new ReportedException(report);
-            }
-        }
+	}
 
-        scene.endFrame = frame;
-    }
+	public void tearDown() {
+		Iterator var1 = this.exporters.iterator();
 
-    public BlenderFile getBlenderFile() {
-        return blenderFile;
-    }
+		while (var1.hasNext()) {
+			Exporter exporter = (Exporter) var1.next();
 
-    public BlenderFactory getFactory() {
-        return factory;
-    }
+			try {
+				exporter.tearDown();
+			} catch (IOException var25) {
+				CrashReport report = CrashReport.forThrowable(var25, "Tear down of blend exporter");
+				CrashReportCategory category = report.addCategory("Exporter");
+				Objects.requireNonNull(exporter);
+				category.setDetail("Exporter", exporter::toString);
+				throw new ReportedException(report);
+			}
+		}
 
-    public DScene getScene() {
-        return scene;
-    }
+		try {
+			Serializer serializer = new Serializer();
+			this.scene.serialize(serializer);
+			PrintStream sysout = System.out;
 
-    public BlendMaterials getMaterials() {
-        return materials;
-    }
+			try {
+				System.setOut(new PrintStream(new NullOutputStream()));
+				this.blenderFile.write();
+			} finally {
+				System.setOut(sysout);
+			}
+		} catch (IOException var23) {
+			ReplayModRender.LOGGER.error("Exception writing blend file: ", var23);
+		} finally {
+			try {
+				this.blenderFile.close();
+			} catch (IOException var21) {
+				ReplayModRender.LOGGER.error("Exception closing blend file: ", var21);
+			}
+
+		}
+
+	}
+
+	public void preFrame(int frame) {
+		Iterator var2 = this.exporters.iterator();
+
+		while (var2.hasNext()) {
+			Exporter exporter = (Exporter) var2.next();
+
+			try {
+				exporter.preFrame(frame);
+			} catch (IOException var7) {
+				CrashReport report = CrashReport.forThrowable(var7, "Pre frame of blend exporter");
+				CrashReportCategory category = report.addCategory("Exporter");
+				Objects.requireNonNull(exporter);
+				category.setDetail("Exporter", exporter::toString);
+				category.setDetail("Frame", () -> {
+					return String.valueOf(frame);
+				});
+				throw new ReportedException(report);
+			}
+		}
+
+	}
+
+	public void postFrame(int frame) {
+		Iterator var2 = this.exporters.iterator();
+
+		while (var2.hasNext()) {
+			Exporter exporter = (Exporter) var2.next();
+
+			try {
+				exporter.postFrame(frame);
+			} catch (IOException var7) {
+				CrashReport report = CrashReport.forThrowable(var7, "Post frame of blend exporter");
+				CrashReportCategory category = report.addCategory("Exporter");
+				Objects.requireNonNull(exporter);
+				category.setDetail("Exporter", exporter::toString);
+				category.setDetail("Frame", () -> {
+					return String.valueOf(frame);
+				});
+				throw new ReportedException(report);
+			}
+		}
+
+		this.scene.endFrame = frame;
+	}
+
+	public BlenderFile getBlenderFile() {
+		return this.blenderFile;
+	}
+
+	public BlenderFactory getFactory() {
+		return this.factory;
+	}
+
+	public DScene getScene() {
+		return this.scene;
+	}
+
+	public BlendMaterials getMaterials() {
+		return this.materials;
+	}
 }

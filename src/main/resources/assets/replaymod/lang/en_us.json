@@ -539,7 +539,7 @@
 
   "_comment": "Screenshot Finished Gui",
   "replaymod.gui.advancedscreenshots.finished.description": "You successfully created a Screenshot!",
-  "replaymod.gui.advancedscreenshots.finished.description.360": "You successfully created a 360Â° Screenshot!",
+  "replaymod.gui.advancedscreenshots.finished.description.360": "You successfully created a 360¡Æ Screenshot!",
   "replaymod.gui.advancedscreenshots.finished.description.veer": "Upload and view the image in VR on VeeR.tv or open it on your disk.",
   "replaymod.gui.advancedscreenshots.finished.upload.veer": "Upload to VeeR.tv",
   "replaymod.gui.advancedscreenshots.finished.showfile": "Show file on disk"

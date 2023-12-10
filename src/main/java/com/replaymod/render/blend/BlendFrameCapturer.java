@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
 
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.Dimension;
+import com.replaymod.render.capturer.CaptureData;
 import com.replaymod.render.capturer.RenderInfo;
 import com.replaymod.render.capturer.WorldRenderer;
 import com.replaymod.render.frame.BitmapFrame;
@@ -11,43 +13,37 @@ import com.replaymod.render.rendering.Channel;
 import com.replaymod.render.rendering.FrameCapturer;
 import com.replaymod.render.utils.ByteBufferPool;
 
-import de.johni0702.minecraft.gui.utils.lwjgl.Dimension;
 import net.minecraft.client.Minecraft;
 
 public class BlendFrameCapturer implements FrameCapturer<BitmapFrame> {
-    protected final WorldRenderer worldRenderer;
-    protected final RenderInfo renderInfo;
-    protected int framesDone;
+	protected final WorldRenderer worldRenderer;
+	protected final RenderInfo renderInfo;
+	protected int framesDone;
 
-    public BlendFrameCapturer(WorldRenderer worldRenderer, RenderInfo renderInfo) {
-        this.worldRenderer = worldRenderer;
-        this.renderInfo = renderInfo;
-    }
+	public BlendFrameCapturer(WorldRenderer worldRenderer, RenderInfo renderInfo) {
+		this.worldRenderer = worldRenderer;
+		this.renderInfo = renderInfo;
+	}
 
-    @Override
-    public boolean isDone() {
-        return framesDone >= renderInfo.getTotalFrames();
-    }
+	public boolean isDone() {
+		return this.framesDone >= this.renderInfo.getTotalFrames();
+	}
 
-    @Override
-    public Map<Channel, BitmapFrame> process() {
-        if (framesDone == 0) {
-            BlendState.getState().setup();
-        }
+	public Map<Channel, BitmapFrame> process() {
+		if (this.framesDone == 0) {
+			BlendState.getState().setup();
+		}
 
-        renderInfo.updateForNextFrame();
+		this.renderInfo.updateForNextFrame();
+		BlendState.getState().preFrame(this.framesDone);
+		this.worldRenderer.renderWorld(Minecraft.getInstance().getPartialTick(), (CaptureData) null);
+		BlendState.getState().postFrame(this.framesDone);
+		BitmapFrame frame = new BitmapFrame(this.framesDone++, new Dimension(0, 0), 0, ByteBufferPool.allocate(0));
+		return Collections.singletonMap(Channel.BRGA, frame);
+	}
 
-        BlendState.getState().preFrame(framesDone);
-        worldRenderer.renderWorld(Minecraft.getInstance().getPartialTick(), null);
-        BlendState.getState().postFrame(framesDone);
-
-        BitmapFrame frame = new BitmapFrame(framesDone++, new Dimension(0, 0), 0, ByteBufferPool.allocate(0));
-        return Collections.singletonMap(Channel.BRGA, frame);
-    }
-
-    @Override
-    public void close() throws IOException {
-        BlendState.getState().tearDown();
-        BlendState.setState(null);
-    }
+	public void close() throws IOException {
+		BlendState.getState().tearDown();
+		BlendState.setState((BlendState) null);
+	}
 }

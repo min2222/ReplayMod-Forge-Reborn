@@ -14,100 +14,97 @@ import com.replaymod.render.utils.ByteBufferPool;
 import com.replaymod.render.utils.PixelBufferObject;
 
 public abstract class PboOpenGlFrameCapturer<F extends Frame, D extends Enum<D> & CaptureData>
-        extends OpenGlFrameCapturer<F, D> {
-    private final boolean withDepth;
-    private final D[] data;
-    private PixelBufferObject pbo, otherPBO;
+		extends OpenGlFrameCapturer<F, D> {
+	private final boolean withDepth;
+	private final D[] data;
+	private PixelBufferObject pbo;
+	private PixelBufferObject otherPBO;
 
-    public PboOpenGlFrameCapturer(WorldRenderer worldRenderer, RenderInfo renderInfo, Class<D> type, int framePixels) {
-        super(worldRenderer, renderInfo);
+	public PboOpenGlFrameCapturer(WorldRenderer worldRenderer, RenderInfo renderInfo, Class<D> type, int framePixels) {
+		super(worldRenderer, renderInfo);
+		this.withDepth = renderInfo.getRenderSettings().isDepthMap();
+		this.data = type.getEnumConstants();
+		int bufferSize = framePixels * (4 + (this.withDepth ? 4 : 0)) * this.data.length;
+		this.pbo = new PixelBufferObject((long) bufferSize, PixelBufferObject.Usage.READ);
+		this.otherPBO = new PixelBufferObject((long) bufferSize, PixelBufferObject.Usage.READ);
+	}
 
-        withDepth = renderInfo.getRenderSettings().isDepthMap();
-        data = type.getEnumConstants();
-        int bufferSize = framePixels * (4 /* bgra */ + (withDepth ? 4 /* float */ : 0)) * data.length;
-        pbo = new PixelBufferObject(bufferSize, PixelBufferObject.Usage.READ);
-        otherPBO = new PixelBufferObject(bufferSize, PixelBufferObject.Usage.READ);
-    }
+	protected abstract F create(OpenGlFrame[] openGlFrames);
 
-    protected abstract F create(OpenGlFrame[] from);
+	private void swapPBOs() {
+		PixelBufferObject old = this.pbo;
+		this.pbo = this.otherPBO;
+		this.otherPBO = old;
+	}
 
-    private void swapPBOs() {
-        PixelBufferObject old = pbo;
-        pbo = otherPBO;
-        otherPBO = old;
-    }
+	public boolean isDone() {
+		return this.framesDone >= this.renderInfo.getTotalFrames() + 2;
+	}
 
-    @Override
-    public boolean isDone() {
-        return framesDone >= renderInfo.getTotalFrames() + 2;
-    }
+	private F readFromPbo(ByteBuffer pboBuffer, int bytesPerPixel) {
+		OpenGlFrame[] frames = new OpenGlFrame[this.data.length];
+		int frameBufferSize = this.getFrameWidth() * this.getFrameHeight() * bytesPerPixel;
 
-    private F readFromPbo(ByteBuffer pboBuffer, int bytesPerPixel) {
-        OpenGlFrame[] frames = new OpenGlFrame[data.length];
-        int frameBufferSize = getFrameWidth() * getFrameHeight() * bytesPerPixel;
-        for (int i = 0; i < frames.length; i++) {
-            ByteBuffer frameBuffer = ByteBufferPool.allocate(frameBufferSize);
-            pboBuffer.limit(pboBuffer.position() + frameBufferSize);
-            frameBuffer.put(pboBuffer);
-            frameBuffer.rewind();
-            frames[i] = new OpenGlFrame(framesDone - 2, frameSize, bytesPerPixel, frameBuffer);
-        }
-        return create(frames);
-    }
+		for (int i = 0; i < frames.length; ++i) {
+			ByteBuffer frameBuffer = ByteBufferPool.allocate(frameBufferSize);
+			pboBuffer.limit(pboBuffer.position() + frameBufferSize);
+			frameBuffer.put(pboBuffer);
+			frameBuffer.rewind();
+			frames[i] = new OpenGlFrame(this.framesDone - 2, this.frameSize, bytesPerPixel, frameBuffer);
+		}
 
-    @Override
-    public Map<Channel, F> process() {
-        Map<Channel, F> channels = null;
+		return this.create(frames);
+	}
 
-        if (framesDone > 1) {
-            // Read pbo to memory
-            pbo.bind();
-            ByteBuffer pboBuffer = pbo.mapReadOnly();
+	public Map<Channel, F> process() {
+		Map<Channel, F> channels = null;
 
-            channels = new HashMap<>();
-            channels.put(Channel.BRGA, readFromPbo(pboBuffer, 4));
-            if (withDepth) {
-                channels.put(Channel.DEPTH, readFromPbo(pboBuffer, 4));
-            }
+		if (framesDone > 1) {
+			// Read pbo to memory
+			pbo.bind();
+			ByteBuffer pboBuffer = pbo.mapReadOnly();
 
-            pbo.unmap();
-            pbo.unbind();
-        }
+			channels = new HashMap<>();
+			channels.put(Channel.BRGA, readFromPbo(pboBuffer, 4));
+			if (withDepth) {
+				channels.put(Channel.DEPTH, readFromPbo(pboBuffer, 4));
+			}
 
-        if (framesDone < renderInfo.getTotalFrames()) {
-            float partialTicks = renderInfo.updateForNextFrame();
-            // Then fill it again
-            for (D data : this.data) {
-                renderFrame(framesDone, partialTicks, data);
-            }
-        }
+			pbo.unmap();
+			pbo.unbind();
+		}
 
-        framesDone++;
-        swapPBOs();
-        return channels;
-    }
+		if (framesDone < renderInfo.getTotalFrames()) {
+			float partialTicks = renderInfo.updateForNextFrame();
+			// Then fill it again
+			for (D data : this.data) {
+				renderFrame(framesDone, partialTicks, data);
+			}
+		}
 
-    @Override
-    protected OpenGlFrame captureFrame(int frameId, D captureData) {
-        pbo.bind();
+		framesDone++;
+		swapPBOs();
+		return channels;
+	}
 
-        int offset = captureData.ordinal() * getFrameWidth() * getFrameHeight() * 4;
-        frameBuffer().bindWrite(true);
-        GL11.glReadPixels(0, 0, getFrameWidth(), getFrameHeight(), 32993, 5121, offset);
-        if (this.withDepth) {
-        	offset += this.data.length * getFrameWidth() * getFrameHeight() * 4;
-        	GL11.glReadPixels(0, 0, getFrameWidth(), getFrameHeight(), 6402, 5126, offset);
-        } 
-        frameBuffer().unbindWrite();
+	protected OpenGlFrame captureFrame(int frameId, D captureData) {
+		this.pbo.bind();
+		int offset = captureData.ordinal() * this.getFrameWidth() * this.getFrameHeight() * 4;
+		this.frameBuffer().bindWrite(true);
+		GL11.glReadPixels(0, 0, this.getFrameWidth(), this.getFrameHeight(), 32993, 5121, (long) offset);
+		if (this.withDepth) {
+			offset += this.data.length * this.getFrameWidth() * this.getFrameHeight() * 4;
+			GL11.glReadPixels(0, 0, this.getFrameWidth(), this.getFrameHeight(), 6402, 5126, (long) offset);
+		}
 
-        pbo.unbind();
-        return null;
-    }
+		this.frameBuffer().unbindWrite();
+		this.pbo.unbind();
+		return null;
+	}
 
-    @Override
-    public void close() throws IOException {
-        super.close();
-        pbo.delete();
-        otherPBO.delete();
-    }
+	public void close() throws IOException {
+		super.close();
+		this.pbo.delete();
+		this.otherPBO.delete();
+	}
 }

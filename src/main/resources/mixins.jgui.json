@@ -1,11 +1,23 @@
 {
   "required": true,
-  "package": "de.johni0702.minecraft.gui.versions.mixin",
+  "package": "com.replaymod.lib.de.johni0702.minecraft.gui.versions.mixin",
   "mixins": [],
   "server": [],
   "client": [
-                                              ],
-  "compatibilityLevel": "JAVA_17",
-  "minVersion": "0.6.11",
-  "refmap": "mixins.jgui.refmap.json"
-}
+    "Mixin_PassEventsExt",
+    "Mixin_RenderHudCallback",
+    "MixinGameRenderer",
+    "MixinScreen",
+    "MixinMouseListener",
+    "MixinKeyboardListener",
+    "MixinMinecraft"
+    "compatibilityLevel"
+    :
+    "JAVA_8",
+    "minVersion"
+    :
+    "0.6.11",
+    "refmap"
+    :
+    "mixins.jgui.refmap.json"
+    }

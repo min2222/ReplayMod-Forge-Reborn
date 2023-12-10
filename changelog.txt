@@ -1,48 +1,70 @@
 1.19.2 Changelog
+43.3
+====
+ - 43.3.0 1.19.2 RB 3
+
 43.2
 ====
- - 43.2.8 Fix JSON model root transforms (#9411)
- - 43.2.7 Fix StemBlock not checking canSustainPlant for the correct block
-          It now checks for Melons/Pumpkins instead of the stem itself.
- - 43.2.6 Fix of inconsistent vaporization in BucketItem & FluidType (#9340)
- - 43.2.5 Backport `ClientChatReceivedEvent.System` for 1.19.2. Fixes #9352 (#9355)
- - 43.2.4 Fire TickEvent.LevelTickEvent on ClientLevel tick (#9302)
- - 43.2.3 Disable guiLight3d for generated item models (#9231)
- - 43.2.2 Fix config key used by resource cache (#9253)
-          This bring it in line with the config key defined in the spec and
-          default config file in ResourceManagerBootCacheConfigurationHandler.
-          Fixes #9252
- - 43.2.1 [1.19.2] Fix compatibility checker task configuration (#9233)
-          * Fix compatibility checker task configuration
-          The setupCheckJarCompatibility task exists to configure the main
-          compatibility checker task, checkJarCompatibility, because certain
-          configuration steps for that task could not be done until after the
-          configuration phase of Gradle.
-          However, that setup task previously held all the configuration for the
-          main check task in its task action. This caused problems because the
-          main check task's inputs are linked to other tasks, and the previous
-          situation made it so its configuration (by the setup task) happened
-          _after_ Gradle built the task dependency model/tree.
-          This meant that certain tasks which the main check task depended on did
-          not run before that task, because Gradle was unaware of this inter-task
-          dependency until it was too late (when it was already executing tasks).
-          This fixes the issue by moving the bulk of the configuration for the
-          main check task from the action of the setup task to the main
-          buildscript, therefore allowing Gradle to know about those task
-          dependencies and factor them in to its process of determining what tasks
-          to run and in what order.
-          The remaining configuration step in the setup task for the main check
-          task is linked to the setup task, and does not affect the task's
-          dependencies (because it uses a configuration which it resolves
-          immediately), so it stays in the setup task.
-          * Force checker setup task to never be up-to-date
-          The setup task configures the main check task, so it should always run
-          before that task. However, because it has an input and output, the setup
-          task is affected by Gradle's incremental build feature, which leads to
-          the possibility that Gradle considers the setup task as up-to-date,
-          therefore not executing its action and causing errors with the main
-          check task down the line.
- - 43.2.0 43.2 Recommended Build.
+ - 43.2.23 Fix `Level` leak in debug HUD (#9701)
+ - 43.2.22 Keep order of sources in PackRepository (#9704)
+           Co-authored-by: dhyces <10985914+dhyces@users.noreply.github.com>
+ - 43.2.21 Fix parameter names in IForgeDimensionSpecialEffects.adjustLightmapColors to better describe what they are. (#9658)
+ - 43.2.20 Re-add in-game mod menu (#9655)
+ - 43.2.19 Fixed FluidUtil#tryFillContainer returning invalid result when simulating (#9358)
+ - 43.2.18 AlterGroundEvent for modifying block placement performed by AlterGroundDecorator (#9635)
+ - 43.2.17 Bump ASM to 9.5 (#9516)
+ - 43.2.16 Improve logging for server connections (#9623)
+ - 43.2.15 Log a proper duplicate mod(s) error message (#9625)
+ - 43.2.14 Fix erroneous getLevel call when firing SpecialSpawn (#9520)
+ - 43.2.13 [1.19.2] Fix the rest of the spawn event calls (#9482)
+ - 43.2.12 Loosen access for BucketItem's canBlockContainFluid (#9429)
+ - 43.2.11 Fix event result being ignored (#9484)
+           Co-authored-by: Brennan Ward <3682588+Shadows-of-Fire@users.noreply.github.com>
+ - 43.2.10 Fix incorrect SpecialSpawn fire location (#9480)
+           Co-authored-by: Brennan Ward <3682588+Shadows-of-Fire@users.noreply.github.com>
+ - 43.2.9  [1.19.2] Fix forge grindstone hooks allowing stacks of non-stackable items (#9466)
+ - 43.2.8  Fix JSON model root transforms (#9411)
+ - 43.2.7  Fix StemBlock not checking canSustainPlant for the correct block
+           It now checks for Melons/Pumpkins instead of the stem itself.
+ - 43.2.6  Fix of inconsistent vaporization in BucketItem & FluidType (#9340)
+ - 43.2.5  Backport `ClientChatReceivedEvent.System` for 1.19.2. Fixes #9352 (#9355)
+ - 43.2.4  Fire TickEvent.LevelTickEvent on ClientLevel tick (#9302)
+ - 43.2.3  Disable guiLight3d for generated item models (#9231)
+ - 43.2.2  Fix config key used by resource cache (#9253)
+           This bring it in line with the config key defined in the spec and
+           default config file in ResourceManagerBootCacheConfigurationHandler.
+           Fixes #9252
+ - 43.2.1  [1.19.2] Fix compatibility checker task configuration (#9233)
+           * Fix compatibility checker task configuration
+           The setupCheckJarCompatibility task exists to configure the main
+           compatibility checker task, checkJarCompatibility, because certain
+           configuration steps for that task could not be done until after the
+           configuration phase of Gradle.
+           However, that setup task previously held all the configuration for the
+           main check task in its task action. This caused problems because the
+           main check task's inputs are linked to other tasks, and the previous
+           situation made it so its configuration (by the setup task) happened
+           _after_ Gradle built the task dependency model/tree.
+           This meant that certain tasks which the main check task depended on did
+           not run before that task, because Gradle was unaware of this inter-task
+           dependency until it was too late (when it was already executing tasks).
+           This fixes the issue by moving the bulk of the configuration for the
+           main check task from the action of the setup task to the main
+           buildscript, therefore allowing Gradle to know about those task
+           dependencies and factor them in to its process of determining what tasks
+           to run and in what order.
+           The remaining configuration step in the setup task for the main check
+           task is linked to the setup task, and does not affect the task's
+           dependencies (because it uses a configuration which it resolves
+           immediately), so it stays in the setup task.
+           * Force checker setup task to never be up-to-date
+           The setup task configures the main check task, so it should always run
+           before that task. However, because it has an input and output, the setup
+           task is affected by Gradle's incremental build feature, which leads to
+           the possibility that Gradle considers the setup task as up-to-date,
+           therefore not executing its action and causing errors with the main
+           check task down the line.
+ - 43.2.0  43.2 Recommended Build.
 
 43.1
 ====

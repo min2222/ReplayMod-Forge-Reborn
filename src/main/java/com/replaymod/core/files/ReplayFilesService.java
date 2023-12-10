@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,176 +19,305 @@ import org.apache.commons.io.FilenameUtils;
 
 import com.replaymod.core.ReplayMod;
 import com.replaymod.core.gui.RestoreReplayGui;
-import com.replaymod.gui.container.GuiScreen;
+import com.replaymod.lib.de.johni0702.minecraft.gui.container.GuiScreen;
 import com.replaymod.replaystudio.replay.ReplayFile;
 import com.replaymod.replaystudio.replay.ZipReplayFile;
 import com.replaymod.replaystudio.studio.ReplayStudio;
 
 public class ReplayFilesService {
-    private final ReplayFoldersService folders;
-    private final Set<Path> lockedPaths = Collections.newSetFromMap(new ConcurrentHashMap<>());
+	private final ReplayFoldersService folders;
+	private final Set<Path> lockedPaths = Collections.newSetFromMap(new ConcurrentHashMap());
 
-    public ReplayFilesService(ReplayFoldersService folders) {
-        this.folders = folders;
-    }
+	public ReplayFilesService(ReplayFoldersService folders) {
+		this.folders = folders;
+	}
 
-    public ReplayFile open(Path path) throws IOException {
-        return open(path, path);
-    }
+	public ReplayFile open(Path path) throws IOException {
+		return this.open(path, path);
+	}
 
-    public ReplayFile open(Path input, Path output) throws IOException {
-        Path realInput = input != null ? input.toAbsolutePath().normalize() : null;
-        Path realOutput = output.toAbsolutePath().normalize();
+	public ReplayFile open(Path input, Path output) throws IOException {
+		Path realInput = input != null ? input.toAbsolutePath().normalize() : null;
+		Path realOutput = output.toAbsolutePath().normalize();
+		if (realInput != null && !this.lockedPaths.add(realInput)) {
+			throw new ReplayFilesService.FileLockedException(realInput);
+		} else if (!Objects.equals(realInput, realOutput) && !this.lockedPaths.add(realOutput)) {
+			if (realInput != null) {
+				this.lockedPaths.remove(realInput);
+			}
 
-        if (realInput != null && !lockedPaths.add(realInput)) {
-            throw new FileLockedException(realInput);
-        }
-        if (!Objects.equals(realInput, realOutput) && !lockedPaths.add(realOutput)) {
-            if (realInput != null) {
-                lockedPaths.remove(realInput);
-            }
-            throw new FileLockedException(realOutput);
-        }
+			throw new ReplayFilesService.FileLockedException(realOutput);
+		} else {
+			Runnable onClose = () -> {
+				if (realInput != null) {
+					this.lockedPaths.remove(realInput);
+				}
 
-        Runnable onClose = () -> {
-            if (realInput != null) {
-                lockedPaths.remove(realInput);
-            }
-            lockedPaths.remove(realOutput);
-        };
+				this.lockedPaths.remove(realOutput);
+			};
 
-        ReplayFile replayFile;
-        try {
-            replayFile = new ZipReplayFile(
-                    new ReplayStudio(),
-                    realInput != null ? realInput.toFile() : null,
-                    realOutput.toFile(),
-                    folders.getCachePathForReplay(realOutput).toFile()
-            );
-        } catch (IOException e) {
-            onClose.run();
-            throw e;
-        }
-        return new ManagedReplayFile(replayFile, onClose);
-    }
+			ZipReplayFile replayFile;
+			try {
+				replayFile = new ZipReplayFile(new ReplayStudio(), realInput != null ? realInput.toFile() : null,
+						realOutput.toFile(), this.folders.getCachePathForReplay(realOutput).toFile());
+			} catch (IOException var8) {
+				onClose.run();
+				throw var8;
+			}
 
-    public void initialScan(ReplayMod core) {
-        // Move anything which is still in the recording folder into the regular replay folder
-        // so it can be opened and/or recovered
-        try (DirectoryStream<Path> paths = Files.newDirectoryStream(folders.getRecordingFolder())) {
-            for (Path path : paths) {
-                Path destination = folders.getReplayFolder().resolve(path.getFileName());
-                if (Files.exists(destination)) {
-                    continue; // better play it save
-                }
-                Files.move(path, destination);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+			return new ManagedReplayFile(replayFile, onClose);
+		}
+	}
 
-        // Restore corrupted replays
-        try (DirectoryStream<Path> paths = Files.newDirectoryStream(folders.getReplayFolder())) {
-            for (Path path : paths) {
-                String name = path.getFileName().toString();
-                if (name.endsWith(".mcpr.tmp") && Files.isDirectory(path)) {
-                    Path original = path.resolveSibling(FilenameUtils.getBaseName(name));
-                    Path noRecoverMarker = original.resolveSibling(original.getFileName() + ".no_recover");
-                    if (Files.exists(noRecoverMarker)) {
-                        // This file, when its markers are processed, doesn't actually result in any replays.
-                        // So we don't really need to recover it either, let's just get rid of it.
-                        FileUtils.deleteDirectory(path.toFile());
-                        Files.delete(noRecoverMarker);
-                        continue;
-                    }
-                    new RestoreReplayGui(core, GuiScreen.wrap(core.getMinecraft().screen), original.toFile()).display();
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+	public void initialScan(ReplayMod core) {
+		DirectoryStream paths;
+		Iterator var3;
+		Path path;
+		try {
+			paths = Files.newDirectoryStream(this.folders.getRecordingFolder());
 
-        // Run general purpose, non-essential cleanup in a background thread
-        new Thread(this::cleanup, "replaymod-cleanup").start();
-    }
+			try {
+				var3 = paths.iterator();
 
-    private void cleanup() {
-        final long DAYS = 24 * 60 * 60 * 1000;
+				while (var3.hasNext()) {
+					path = (Path) var3.next();
+					Path destination = this.folders.getReplayFolder().resolve(path.getFileName());
+					if (!Files.exists(destination, new LinkOption[0])) {
+						Files.move(path, destination);
+					}
+				}
+			} catch (Throwable var12) {
+				if (paths != null) {
+					try {
+						paths.close();
+					} catch (Throwable var9) {
+						var12.addSuppressed(var9);
+					}
+				}
 
-        // Cleanup any cache folders still remaining in the recording folder (we once used to put them there)
-        try {
-            Files.walkFileTree(folders.getReplayFolder(), new SimpleFileVisitor<Path>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                    String name = dir.getFileName().toString();
-                    if (name.endsWith(".mcpr.cache")) {
-                        FileUtils.deleteDirectory(dir.toFile());
-                        return FileVisitResult.SKIP_SUBTREE;
-                    }
-                    return super.preVisitDirectory(dir, attrs);
-                }
-            });
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+				throw var12;
+			}
 
-        // Cleanup raw folder content three weeks after creation (these are pretty valuable for debugging)
-        try (DirectoryStream<Path> paths = Files.newDirectoryStream(folders.getRawReplayFolder())) {
-            for (Path path : paths) {
-                if (Files.getLastModifiedTime(path).toMillis() + 21 * DAYS < System.currentTimeMillis()) {
-                    Files.delete(path);
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+			if (paths != null) {
+				paths.close();
+			}
+		} catch (IOException var13) {
+			var13.printStackTrace();
+		}
 
-        // Cleanup cache folders 7 days after last modification or when its replay is gone
-        try (DirectoryStream<Path> paths = Files.newDirectoryStream(folders.getCacheFolder())) {
-            for (Path path : paths) {
-                if (Files.isDirectory(path)) {
-                    Path replay = folders.getReplayPathForCache(path);
-                    long lastModified = Files.getLastModifiedTime(path).toMillis();
-                    if (lastModified + 7 * DAYS < System.currentTimeMillis() || !Files.exists(replay)) {
-                        FileUtils.deleteDirectory(path.toFile());
-                    }
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+		try {
+			paths = Files.newDirectoryStream(this.folders.getReplayFolder());
 
-        // Cleanup deleted corrupted replays
-        try (DirectoryStream<Path> paths = Files.newDirectoryStream(folders.getReplayFolder())) {
-            for (Path path : paths) {
-                String name = path.getFileName().toString();
-                if (name.endsWith(".mcpr.del") && Files.isDirectory(path)) {
-                    long lastModified = Files.getLastModifiedTime(path).toMillis();
-                    if (lastModified + 2 * DAYS < System.currentTimeMillis()) {
-                        FileUtils.deleteDirectory(path.toFile());
-                    }
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+			try {
+				var3 = paths.iterator();
 
-        // Cleanup leftover no_recover files
-        try (DirectoryStream<Path> paths = Files.newDirectoryStream(folders.getReplayFolder())) {
-            for (Path path : paths) {
-                String name = path.getFileName().toString();
-                if (name.endsWith(".no_recover")) {
-                    Files.delete(path);
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
+				while (var3.hasNext()) {
+					path = (Path) var3.next();
+					String name = path.getFileName().toString();
+					if (name.endsWith(".mcpr.tmp") && Files.isDirectory(path, new LinkOption[0])) {
+						Path original = path.resolveSibling(FilenameUtils.getBaseName(name));
+						Path noRecoverMarker = original.resolveSibling(original.getFileName() + ".no_recover");
+						if (Files.exists(noRecoverMarker, new LinkOption[0])) {
+							FileUtils.deleteDirectory(path.toFile());
+							Files.delete(noRecoverMarker);
+						} else {
+							(new RestoreReplayGui(core, GuiScreen.wrap(core.getMinecraft().screen), original.toFile()))
+									.display();
+						}
+					}
+				}
+			} catch (Throwable var10) {
+				if (paths != null) {
+					try {
+						paths.close();
+					} catch (Throwable var8) {
+						var10.addSuppressed(var8);
+					}
+				}
 
-    public static class FileLockedException extends IOException {
-        public FileLockedException(Path path) {
-            super(path.toString());
-        }
-    }
+				throw var10;
+			}
+
+			if (paths != null) {
+				paths.close();
+			}
+		} catch (IOException var11) {
+			var11.printStackTrace();
+		}
+
+		(new Thread(this::cleanup, "replaymod-cleanup")).start();
+	}
+
+	private void cleanup() {
+		long var1 = 86400000L;
+
+		try {
+			Files.walkFileTree(this.folders.getReplayFolder(), new SimpleFileVisitor<Path>() {
+				public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+					String name = dir.getFileName().toString();
+					if (name.endsWith(".mcpr.cache")) {
+						FileUtils.deleteDirectory(dir.toFile());
+						return FileVisitResult.SKIP_SUBTREE;
+					} else {
+						return super.preVisitDirectory(dir, attrs);
+					}
+				}
+			});
+		} catch (IOException var13) {
+			var13.printStackTrace();
+		}
+
+		DirectoryStream paths;
+		Iterator var4;
+		Path path;
+		try {
+			paths = Files.newDirectoryStream(this.folders.getRawReplayFolder());
+
+			try {
+				var4 = paths.iterator();
+
+				while (var4.hasNext()) {
+					path = (Path) var4.next();
+					if (Files.getLastModifiedTime(path).toMillis() + 1814400000L < System.currentTimeMillis()) {
+						Files.delete(path);
+					}
+				}
+			} catch (Throwable var20) {
+				if (paths != null) {
+					try {
+						paths.close();
+					} catch (Throwable var12) {
+						var20.addSuppressed(var12);
+					}
+				}
+
+				throw var20;
+			}
+
+			if (paths != null) {
+				paths.close();
+			}
+		} catch (IOException var21) {
+			var21.printStackTrace();
+		}
+
+		long lastModified;
+		try {
+			paths = Files.newDirectoryStream(this.folders.getCacheFolder());
+
+			try {
+				var4 = paths.iterator();
+
+				label147: while (true) {
+					Path replay;
+					do {
+						do {
+							if (!var4.hasNext()) {
+								break label147;
+							}
+
+							path = (Path) var4.next();
+						} while (!Files.isDirectory(path, new LinkOption[0]));
+
+						replay = this.folders.getReplayPathForCache(path);
+						lastModified = Files.getLastModifiedTime(path).toMillis();
+					} while (lastModified + 604800000L >= System.currentTimeMillis()
+							&& Files.exists(replay, new LinkOption[0]));
+
+					FileUtils.deleteDirectory(path.toFile());
+				}
+			} catch (Throwable var18) {
+				if (paths != null) {
+					try {
+						paths.close();
+					} catch (Throwable var11) {
+						var18.addSuppressed(var11);
+					}
+				}
+
+				throw var18;
+			}
+
+			if (paths != null) {
+				paths.close();
+			}
+		} catch (IOException var19) {
+			var19.printStackTrace();
+		}
+
+		String name;
+		try {
+			paths = Files.newDirectoryStream(this.folders.getReplayFolder());
+
+			try {
+				var4 = paths.iterator();
+
+				while (var4.hasNext()) {
+					path = (Path) var4.next();
+					name = path.getFileName().toString();
+					if (name.endsWith(".mcpr.del") && Files.isDirectory(path, new LinkOption[0])) {
+						lastModified = Files.getLastModifiedTime(path).toMillis();
+						if (lastModified + 172800000L < System.currentTimeMillis()) {
+							FileUtils.deleteDirectory(path.toFile());
+						}
+					}
+				}
+			} catch (Throwable var16) {
+				if (paths != null) {
+					try {
+						paths.close();
+					} catch (Throwable var10) {
+						var16.addSuppressed(var10);
+					}
+				}
+
+				throw var16;
+			}
+
+			if (paths != null) {
+				paths.close();
+			}
+		} catch (IOException var17) {
+			var17.printStackTrace();
+		}
+
+		try {
+			paths = Files.newDirectoryStream(this.folders.getReplayFolder());
+
+			try {
+				var4 = paths.iterator();
+
+				while (var4.hasNext()) {
+					path = (Path) var4.next();
+					name = path.getFileName().toString();
+					if (name.endsWith(".no_recover")) {
+						Files.delete(path);
+					}
+				}
+			} catch (Throwable var14) {
+				if (paths != null) {
+					try {
+						paths.close();
+					} catch (Throwable var9) {
+						var14.addSuppressed(var9);
+					}
+				}
+
+				throw var14;
+			}
+
+			if (paths != null) {
+				paths.close();
+			}
+		} catch (IOException var15) {
+			var15.printStackTrace();
+		}
+
+	}
+
+	public static class FileLockedException extends IOException {
+		public FileLockedException(Path path) {
+			super(path.toString());
+		}
+	}
 }

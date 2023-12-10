@@ -1,121 +1,129 @@
 package com.replaymod.core;
 
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import com.replaymod.core.events.SettingsChangedCallback;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.util.*;
-
 public class SettingsRegistry {
-    private final Map<SettingKey<?>, Object> settings = Collections.synchronizedMap(new LinkedHashMap<>());
-    final SettingsRegistryBackend backend = new SettingsRegistryBackend(settings);
+	private final Map<SettingKey<?>, Object> settings = Collections.synchronizedMap(new LinkedHashMap<>());
+	final SettingsRegistryBackend backend;
 
-    public void register() {
-        backend.register();
-    }
+	public SettingsRegistry() {
+		this.backend = new SettingsRegistryBackend(this.settings);
+	}
 
-    public void register(Class<?> settingsClass) {
-        for (Field field : settingsClass.getDeclaredFields()) {
-            if ((field.getModifiers() & (Modifier.STATIC | Modifier.PUBLIC)) != 0
-                    && SettingKey.class.isAssignableFrom(field.getType())) {
-                try {
-                    register((SettingKey<?>) field.get(null));
-                } catch (IllegalAccessException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
+	public void register() {
+		this.backend.register();
+	}
 
-    public void register(SettingKey<?> key) {
-        settings.put(key, key.getDefault());
-        backend.register(key);
-    }
+	public void register(Class<?> settingsClass) {
+		Field[] var2 = settingsClass.getDeclaredFields();
+		int var3 = var2.length;
 
-    public Set<SettingKey<?>> getSettings() {
-        return settings.keySet();
-    }
+		for (int var4 = 0; var4 < var3; ++var4) {
+			Field field = var2[var4];
+			if ((field.getModifiers() & 9) != 0
+					&& SettingsRegistry.SettingKey.class.isAssignableFrom(field.getType())) {
+				try {
+					this.register((SettingsRegistry.SettingKey) field.get((Object) null));
+				} catch (IllegalAccessException var7) {
+					var7.printStackTrace();
+				}
+			}
+		}
 
-    @SuppressWarnings("unchecked")
-    public <T> T get(SettingKey<T> key) {
-        if (!settings.containsKey(key)) {
-            throw new IllegalArgumentException("Setting " + key + " unknown.");
-        }
-        return (T) settings.get(key);
-    }
+	}
 
-    public <T> void set(SettingKey<T> key, T value) {
-        backend.update(key, value);
-        settings.put(key, value);
-        SettingsChangedCallback.EVENT.invoker().onSettingsChanged(this, key);
-    }
+	public void register(SettingsRegistry.SettingKey<?> key) {
+		this.settings.put(key, key.getDefault());
+		this.backend.register(key);
+	}
 
-    public void save() {
-        backend.save();
-    }
+	public Set<SettingsRegistry.SettingKey<?>> getSettings() {
+		return this.settings.keySet();
+	}
 
-    public interface SettingKey<T> {
-        String getCategory();
+	@SuppressWarnings("unchecked")
+	public <T> T get(SettingKey<T> key) {
+		if (!settings.containsKey(key)) {
+			throw new IllegalArgumentException("Setting " + key + " unknown.");
+		}
+		return (T) settings.get(key);
+	}
 
-        String getKey();
+	public <T> void set(SettingsRegistry.SettingKey<T> key, T value) {
+		this.backend.update(key, value);
+		this.settings.put(key, value);
+		((SettingsChangedCallback) SettingsChangedCallback.EVENT.invoker()).onSettingsChanged(this, key);
+	}
 
-        String getDisplayString();
+	public void save() {
+		this.backend.save();
+	}
 
-        T getDefault();
-    }
+	public interface SettingKey<T> {
+		String getCategory();
 
-    public interface MultipleChoiceSettingKey<T> extends SettingKey<T> {
-        List<T> getChoices();
-    }
+		String getKey();
 
-    public static class SettingKeys<T> implements SettingKey<T> {
-        private final String category;
-        private final String key;
-        private final String displayString;
-        private final T defaultValue;
+		String getDisplayString();
 
-        public SettingKeys(String category, String key, String displayString, T defaultValue) {
-            this.category = category;
-            this.key = key;
-            this.displayString = displayString;
-            this.defaultValue = defaultValue;
-        }
+		T getDefault();
+	}
 
-        @Override
-        public String getCategory() {
-            return category;
-        }
+	public static class MultipleChoiceSettingKeys<T> extends SettingsRegistry.SettingKeys<T>
+			implements SettingsRegistry.MultipleChoiceSettingKey<T> {
+		private List<T> choices = Collections.emptyList();
 
-        @Override
-        public String getKey() {
-            return key;
-        }
+		public MultipleChoiceSettingKeys(String category, String key, String displayString, T defaultValue) {
+			super(category, key, displayString, defaultValue);
+		}
 
-        @Override
-        public String getDisplayString() {
-            return displayString;
-        }
+		public void setChoices(List<T> choices) {
+			this.choices = Collections.unmodifiableList(choices);
+		}
 
-        @Override
-        public T getDefault() {
-            return defaultValue;
-        }
-    }
+		public List<T> getChoices() {
+			return this.choices;
+		}
+	}
 
-    public static class MultipleChoiceSettingKeys<T> extends SettingKeys<T> implements MultipleChoiceSettingKey<T> {
-        private List<T> choices = Collections.emptyList();
+	public static class SettingKeys<T> implements SettingsRegistry.SettingKey<T> {
+		private final String category;
+		private final String key;
+		private final String displayString;
+		private final T defaultValue;
 
-        public MultipleChoiceSettingKeys(String category, String key, String displayString, T defaultValue) {
-            super(category, key, displayString, defaultValue);
-        }
+		public SettingKeys(String category, String key, String displayString, T defaultValue) {
+			this.category = category;
+			this.key = key;
+			this.displayString = displayString;
+			this.defaultValue = defaultValue;
+		}
 
-        public void setChoices(List<T> choices) {
-            this.choices = Collections.unmodifiableList(choices);
-        }
+		public String getCategory() {
+			return this.category;
+		}
 
-        @Override
-        public List<T> getChoices() {
-            return choices;
-        }
-    }
+		public String getKey() {
+			return this.key;
+		}
+
+		public String getDisplayString() {
+			return this.displayString;
+		}
+
+		public T getDefault() {
+			return this.defaultValue;
+		}
+	}
+
+	public interface MultipleChoiceSettingKey<T> extends SettingsRegistry.SettingKey<T> {
+		List<T> getChoices();
+	}
 }

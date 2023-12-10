@@ -1,16 +1,16 @@
 package com.replaymod.render.capturer;
 
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
 import com.replaymod.render.RenderSettings;
-import de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
 
 public interface RenderInfo {
-    ReadableDimension getFrameSize();
+	ReadableDimension getFrameSize();
 
-    int getFramesDone();
+	int getFramesDone();
 
-    int getTotalFrames();
+	int getTotalFrames();
 
-    float updateForNextFrame();
+	float updateForNextFrame();
 
-    RenderSettings getRenderSettings();
+	RenderSettings getRenderSettings();
 }

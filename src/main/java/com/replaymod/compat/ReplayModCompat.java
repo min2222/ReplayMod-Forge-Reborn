@@ -8,12 +8,10 @@ import com.replaymod.compat.shaders.ShaderBeginRender;
 import com.replaymod.core.Module;
 
 public class ReplayModCompat implements Module {
-    public static Logger LOGGER = LogManager.getLogger();
+	public static Logger LOGGER = LogManager.getLogger();
 
-    @Override
-    public void initClient() {
-        new ShaderBeginRender().register();
-        new DisableFastRender().register();
-    }
-
+	public void initClient() {
+		(new ShaderBeginRender()).register();
+		(new DisableFastRender()).register();
+	}
 }

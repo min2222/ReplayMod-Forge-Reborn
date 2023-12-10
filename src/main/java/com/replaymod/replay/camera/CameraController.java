@@ -1,9 +1,9 @@
 package com.replaymod.replay.camera;
 
 public interface CameraController {
-    void update(float partialTicksPassed);
+	void update(float f);
 
-    void increaseSpeed();
+	void increaseSpeed();
 
-    void decreaseSpeed();
+	void decreaseSpeed();
 }

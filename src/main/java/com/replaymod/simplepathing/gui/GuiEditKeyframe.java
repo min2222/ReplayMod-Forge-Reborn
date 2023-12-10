@@ -1,30 +1,31 @@
 package com.replaymod.simplepathing.gui;
 
-import static com.replaymod.gui.utils.Utils.link;
-
-import java.util.Map;
+import java.util.Iterator;
+import java.util.Map.Entry;
 import java.util.Optional;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.replaymod.core.versions.MCVer.Keyboard;
-import com.replaymod.gui.container.AbstractGuiContainer;
-import com.replaymod.gui.container.GuiPanel;
-import com.replaymod.gui.element.GuiButton;
-import com.replaymod.gui.element.GuiLabel;
-import com.replaymod.gui.element.GuiNumberField;
-import com.replaymod.gui.element.GuiTooltip;
-import com.replaymod.gui.element.IGuiClickable;
-import com.replaymod.gui.element.IGuiLabel;
-import com.replaymod.gui.element.advanced.GuiDropdownMenu;
-import com.replaymod.gui.function.Typeable;
-import com.replaymod.gui.layout.GridLayout;
-import com.replaymod.gui.layout.HorizontalLayout;
-import com.replaymod.gui.layout.VerticalLayout;
-import com.replaymod.gui.popup.AbstractGuiPopup;
-import com.replaymod.gui.utils.Colors;
-import com.replaymod.gui.utils.Consumer;
+import com.replaymod.lib.de.johni0702.minecraft.gui.container.AbstractGuiContainer;
+import com.replaymod.lib.de.johni0702.minecraft.gui.container.GuiPanel;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiButton;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiElement;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiLabel;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiNumberField;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.GuiTooltip;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.IGuiClickable;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.IGuiLabel;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.advanced.GuiDropdownMenu;
+import com.replaymod.lib.de.johni0702.minecraft.gui.function.Typeable;
+import com.replaymod.lib.de.johni0702.minecraft.gui.layout.GridLayout;
+import com.replaymod.lib.de.johni0702.minecraft.gui.layout.HorizontalLayout;
+import com.replaymod.lib.de.johni0702.minecraft.gui.layout.VerticalLayout;
+import com.replaymod.lib.de.johni0702.minecraft.gui.popup.AbstractGuiPopup;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.Colors;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.Consumer;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.Utils;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.ReadablePoint;
 import com.replaymod.pathing.properties.CameraProperties;
 import com.replaymod.pathing.properties.TimestampProperty;
 import com.replaymod.replay.ReplayModReplay;
@@ -39,399 +40,402 @@ import com.replaymod.replaystudio.pathing.path.Path;
 import com.replaymod.replaystudio.pathing.path.PathSegment;
 import com.replaymod.simplepathing.InterpolatorType;
 import com.replaymod.simplepathing.SPTimeline;
-import com.replaymod.simplepathing.SPTimeline.SPPath;
 import com.replaymod.simplepathing.Setting;
 import com.replaymod.simplepathing.properties.ExplicitInterpolationProperty;
 
-import de.johni0702.minecraft.gui.utils.lwjgl.ReadablePoint;
 import net.minecraft.client.resources.language.I18n;
 
 public abstract class GuiEditKeyframe<T extends GuiEditKeyframe<T>> extends AbstractGuiPopup<T> implements Typeable {
-    private static GuiNumberField newGuiNumberField() {
-        return new GuiNumberField().setPrecision(0).setValidateOnFocusChange(true);
-    }
-
-    protected static final Logger logger = LogManager.getLogger();
-
-    protected final GuiPathing guiPathing;
-
-    protected final long time;
-    protected final Keyframe keyframe;
-    protected final Path path;
-
-    public final GuiLabel title = new GuiLabel();
-
-    public final GuiPanel inputs = new GuiPanel();
-
-    public final GuiNumberField timeMinField = newGuiNumberField().setSize(30, 20).setMinValue(0);
-    public final GuiNumberField timeSecField = newGuiNumberField().setSize(20, 20).setMinValue(0).setMaxValue(59);
-    public final GuiNumberField timeMSecField = newGuiNumberField().setSize(30, 20).setMinValue(0).setMaxValue(999);
-
-    public final GuiPanel timePanel = new GuiPanel()
-            .setLayout(new HorizontalLayout(HorizontalLayout.Alignment.RIGHT).setSpacing(3))
-            .addElements(new HorizontalLayout.Data(0.5),
-                    new GuiLabel().setI18nText("replaymod.gui.editkeyframe.timelineposition"),
-                    timeMinField, new GuiLabel().setI18nText("replaymod.gui.minutes"),
-                    timeSecField, new GuiLabel().setI18nText("replaymod.gui.seconds"),
-                    timeMSecField, new GuiLabel().setI18nText("replaymod.gui.milliseconds"));
-
-    public final GuiButton saveButton = new GuiButton().setSize(150, 20).setI18nLabel("replaymod.gui.save");
-
-    public final GuiButton cancelButton = new GuiButton()
-            .onClick(this::close).setSize(150, 20).setI18nLabel("replaymod.gui.cancel");
-
-    public final GuiPanel buttons = new GuiPanel()
-            .setLayout(new HorizontalLayout(HorizontalLayout.Alignment.CENTER).setSpacing(7))
-            .addElements(new HorizontalLayout.Data(0.5), saveButton, cancelButton);
-
-    {
-        setBackgroundColor(Colors.DARK_TRANSPARENT);
-
-        popup.setLayout(new VerticalLayout().setSpacing(10))
-                .addElements(new VerticalLayout.Data(0.5, false), title, inputs, timePanel, buttons);
-    }
-
-    public GuiEditKeyframe(GuiPathing gui, SPPath path, long time, String type) {
-        super(ReplayModReplay.instance.getReplayHandler().getOverlay());
-        this.guiPathing = gui;
-        this.time = time;
-        this.path = gui.getMod().getCurrentTimeline().getPath(path);
-        this.keyframe = this.path.getKeyframe(time);
-
-        Consumer<String> updateSaveButtonState = s -> saveButton.setEnabled(canSave());
-        timeMinField.setValue(time / 1000 / 60).onTextChanged(updateSaveButtonState);
-        timeSecField.setValue(time / 1000 % 60).onTextChanged(updateSaveButtonState);
-        timeMSecField.setValue(time % 1000).onTextChanged(updateSaveButtonState);
-
-        title.setI18nText("replaymod.gui.editkeyframe.title." + type);
-        saveButton.onClick(() -> {
-            Change change = save();
-            long newTime = (timeMinField.getInteger() * 60 + timeSecField.getInteger()) * 1000 + timeMSecField.getInteger();
-            if (newTime != time) {
-                change = CombinedChange.createFromApplied(change,
-                        gui.getMod().getCurrentTimeline().moveKeyframe(path, time, newTime));
-                if (gui.getMod().getSelectedPath() == path && gui.getMod().getSelectedTime() == time) {
-                    gui.getMod().setSelected(path, newTime);
-                }
-            }
-            gui.getMod().getCurrentTimeline().getTimeline().pushChange(change);
-            close();
-        });
-    }
-
-    private boolean canSave() {
-        long newTime = (timeMinField.getInteger() * 60 + timeSecField.getInteger()) * 1000 + timeMSecField.getInteger();
-        if (newTime < 0 || newTime > guiPathing.timeline.getLength()) {
-            return false;
-        }
-        if (newTime != keyframe.getTime() && path.getKeyframe(newTime) != null) {
-            return false;
-        }
-        return true;
-    }
-
-    @Override
-    public boolean typeKey(ReadablePoint mousePosition, int keyCode, char keyChar, boolean ctrlDown, boolean shiftDown) {
-        if (keyCode == Keyboard.KEY_ESCAPE) {
-            cancelButton.onClick();
-            return true;
-        }
-        return false;
-    }
-
-    @Override
-    public void open() {
-        super.open();
-    }
-
-    protected abstract Change save();
-
-    public static class Spectator extends GuiEditKeyframe<Spectator> {
-        public Spectator(GuiPathing gui, SPPath path, long keyframe) {
-            super(gui, path, keyframe, "spec");
-
-            link(timeMinField, timeSecField, timeMSecField);
-
-            popup.invokeAll(IGuiLabel.class, e -> e.setColor(Colors.BLACK));
-        }
-
-        @Override
-        protected Change save() {
-            return CombinedChange.createFromApplied();
-        }
-
-        @Override
-        protected Spectator getThis() {
-            return this;
-        }
-    }
-
-    public static class Time extends GuiEditKeyframe<Time> {
-        public final GuiNumberField timestampMinField = newGuiNumberField().setSize(30, 20).setMinValue(0);
-        public final GuiNumberField timestampSecField = newGuiNumberField().setSize(20, 20).setMinValue(0).setMaxValue(59);
-        public final GuiNumberField timestampMSecField = newGuiNumberField().setSize(30, 20).setMinValue(0).setMaxValue(999);
-
-        {
-            inputs.setLayout(new HorizontalLayout(HorizontalLayout.Alignment.RIGHT).setSpacing(3))
-                    .addElements(new HorizontalLayout.Data(0.5),
-                            new GuiLabel().setI18nText("replaymod.gui.editkeyframe.timestamp"),
-                            timestampMinField, new GuiLabel().setI18nText("replaymod.gui.minutes"),
-                            timestampSecField, new GuiLabel().setI18nText("replaymod.gui.seconds"),
-                            timestampMSecField, new GuiLabel().setI18nText("replaymod.gui.milliseconds"));
-        }
-
-        public Time(GuiPathing gui, SPPath path, long keyframe) {
-            super(gui, path, keyframe, "time");
-
-            this.keyframe.getValue(TimestampProperty.PROPERTY).ifPresent(time -> {
-                timestampMinField.setValue(time / 1000 / 60);
-                timestampSecField.setValue(time / 1000 % 60);
-                timestampMSecField.setValue(time % 1000);
-            });
-
-            link(timestampMinField, timestampSecField, timestampMSecField, timeMinField, timeSecField, timeMSecField);
-
-            popup.invokeAll(IGuiLabel.class, e -> e.setColor(Colors.BLACK));
-        }
-
-        @Override
-        protected Change save() {
-            int time = (timestampMinField.getInteger() * 60 + timestampSecField.getInteger()) * 1000
-                    + timestampMSecField.getInteger();
-            return guiPathing.getMod().getCurrentTimeline().updateTimeKeyframe(keyframe.getTime(), time);
-        }
-
-        @Override
-        protected Time getThis() {
-            return this;
-        }
-    }
-
-    public static class Position extends GuiEditKeyframe<Position> {
-        public final GuiNumberField xField = newGuiNumberField().setSize(60, 20).setPrecision(5);
-        public final GuiNumberField yField = newGuiNumberField().setSize(60, 20).setPrecision(5);
-        public final GuiNumberField zField = newGuiNumberField().setSize(60, 20).setPrecision(5);
-
-        public final GuiNumberField yawField = newGuiNumberField().setSize(60, 20).setPrecision(5);
-        public final GuiNumberField pitchField = newGuiNumberField().setSize(60, 20).setPrecision(5);
-        public final GuiNumberField rollField = newGuiNumberField().setSize(60, 20).setPrecision(5);
-
-        public final InterpolationPanel interpolationPanel = new InterpolationPanel();
-
-        {
-            GuiPanel positionInputs = new GuiPanel()
-                    .setLayout(new GridLayout().setCellsEqualSize(false).setColumns(4).setSpacingX(3).setSpacingY(5))
-                    .addElements(new GridLayout.Data(1, 0.5),
-                            new GuiLabel().setI18nText("replaymod.gui.editkeyframe.xpos"), xField,
-                            new GuiLabel().setI18nText("replaymod.gui.editkeyframe.camyaw"), yawField,
-                            new GuiLabel().setI18nText("replaymod.gui.editkeyframe.ypos"), yField,
-                            new GuiLabel().setI18nText("replaymod.gui.editkeyframe.campitch"), pitchField,
-                            new GuiLabel().setI18nText("replaymod.gui.editkeyframe.zpos"), zField,
-                            new GuiLabel().setI18nText("replaymod.gui.editkeyframe.camroll"), rollField);
-
-            inputs.setLayout(new VerticalLayout().setSpacing(10)).addElements(new VerticalLayout.Data(0.5, false),
-                    positionInputs, interpolationPanel);
-        }
-
-        public Position(GuiPathing gui, SPPath path, long keyframe) {
-            super(gui, path, keyframe, "pos");
-
-            this.keyframe.getValue(CameraProperties.POSITION).ifPresent(pos -> {
-                xField.setValue(pos.getLeft());
-                yField.setValue(pos.getMiddle());
-                zField.setValue(pos.getRight());
-            });
-            this.keyframe.getValue(CameraProperties.ROTATION).ifPresent(rot -> {
-                yawField.setValue(rot.getLeft());
-                pitchField.setValue(rot.getMiddle());
-                rollField.setValue(rot.getRight());
-            });
-
-            link(xField, yField, zField, yawField, pitchField, rollField, timeMinField, timeSecField, timeMSecField);
-
-            popup.invokeAll(IGuiLabel.class, e -> e.setColor(Colors.BLACK));
-        }
-
-        @Override
-        protected Change save() {
-            SPTimeline timeline = guiPathing.getMod().getCurrentTimeline();
-            Change positionChange = timeline.updatePositionKeyframe(time,
-                    xField.getDouble(), yField.getDouble(), zField.getDouble(),
-                    yawField.getFloat(), pitchField.getFloat(), rollField.getFloat()
-            );
-            if (interpolationPanel.getSettingsPanel() == null) {
-                // The last keyframe doesn't have interpolator settings because there is no segment following it
-                return positionChange;
-            }
-            Interpolator interpolator = interpolationPanel.getSettingsPanel().createInterpolator();
-            if (interpolationPanel.getInterpolatorType() == InterpolatorType.DEFAULT) {
-                return CombinedChange.createFromApplied(positionChange, timeline.setInterpolatorToDefault(time),
-                        timeline.setDefaultInterpolator(interpolator));
-            } else {
-                return CombinedChange.createFromApplied(positionChange, timeline.setInterpolator(time, interpolator));
-            }
-        }
-
-        @Override
-        protected Position getThis() {
-            return this;
-        }
-
-        public class InterpolationPanel extends AbstractGuiContainer<InterpolationPanel> {
-
-            private SettingsPanel settingsPanel;
-
-            private GuiDropdownMenu<InterpolatorType> dropdown;
-
-            public InterpolationPanel() {
-                setLayout(new VerticalLayout());
-
-                dropdown = new GuiDropdownMenu<InterpolatorType>()
-                        .setToString(s -> I18n.get(s.getI18nName()))
-                        .setValues(InterpolatorType.values()).setHeight(20)
-                        .onSelection(i -> setSettingsPanel(dropdown.getSelectedValue()));
-
-                // set hover tooltips
-                for (Map.Entry<InterpolatorType, IGuiClickable> e : dropdown.getDropdownEntries().entrySet()) {
-                    e.getValue().setTooltip(new GuiTooltip().setI18nText(e.getKey().getI18nDescription()));
-                }
-
-                GuiPanel dropdownPanel = new GuiPanel()
-                        .setLayout(new GridLayout().setCellsEqualSize(false).setColumns(2).setSpacingX(3).setSpacingY(5))
-                        .addElements(new GridLayout.Data(1, 0.5),
-                                new GuiLabel().setI18nText("replaymod.gui.editkeyframe.interpolator"), dropdown);
-
-
-                addElements(new VerticalLayout.Data(0.5, false), dropdownPanel);
-
-                Optional<PathSegment> segment = path.getSegments().stream()
-                        .filter(s -> s.getStartKeyframe() == keyframe).findFirst();
-                if (segment.isPresent()) {
-                    Interpolator interpolator = segment.get().getInterpolator();
-                    InterpolatorType type = InterpolatorType.fromClass(interpolator.getClass());
-                    if (keyframe.getValue(ExplicitInterpolationProperty.PROPERTY).isPresent()) {
-                        dropdown.setSelected(type); // trigger the callback once to display settings panel
-                    } else {
-                        setSettingsPanel(InterpolatorType.DEFAULT);
-                        type = InterpolatorType.DEFAULT;
-                    }
-                    if (getInterpolatorTypeNoDefault(type).getInterpolatorClass().isInstance(interpolator)) {
-                        //noinspection unchecked
-                        settingsPanel.loadSettings(interpolator);
-                    }
-                } else {
-                    // Disable dropdown if this is the last keyframe
-                    dropdown.setDisabled();
-                }
-            }
-
-            public SettingsPanel getSettingsPanel() {
-                return settingsPanel;
-            }
-
-            public void setSettingsPanel(InterpolatorType type) {
-                removeElement(this.settingsPanel);
-
-                switch (getInterpolatorTypeNoDefault(type)) {
-                    case CATMULL_ROM:
-                        settingsPanel = new CatmullRomSettingsPanel();
-                        break;
-                    case CUBIC:
-                        settingsPanel = new CubicSettingsPanel();
-                        break;
-                    case LINEAR:
-                        settingsPanel = new LinearSettingsPanel();
-                        break;
-                }
-
-                addElements(new GridLayout.Data(0.5, 0.5), settingsPanel);
-            }
-
-            protected InterpolatorType getInterpolatorTypeNoDefault(InterpolatorType interpolatorType) {
-                if (interpolatorType == InterpolatorType.DEFAULT || interpolatorType == null) {
-                    InterpolatorType defaultType = InterpolatorType.fromString(
-                            guiPathing.getMod().getCore().getSettingsRegistry().get(Setting.DEFAULT_INTERPOLATION));
-                    return defaultType;
-                }
-                return interpolatorType;
-            }
-
-            public InterpolatorType getInterpolatorType() {
-                return dropdown.getSelectedValue();
-            }
-
-            @Override
-            protected InterpolationPanel getThis() {
-                return this;
-            }
-
-            public abstract class SettingsPanel<I extends Interpolator, T extends SettingsPanel<I, T>> extends AbstractGuiContainer<T> {
-
-                public abstract void loadSettings(I interpolator);
-
-                public abstract I createInterpolator();
-            }
-
-            public class CatmullRomSettingsPanel extends SettingsPanel<CatmullRomSplineInterpolator, CatmullRomSettingsPanel> {
-                public final GuiLabel alphaLabel = new GuiLabel().setColor(Colors.BLACK)
-                        .setI18nText("replaymod.gui.editkeyframe.interpolator.catmullrom.alpha");
-                public final GuiNumberField alphaField = new GuiNumberField().setSize(100, 20).setPrecision(5)
-                        .setMinValue(0).setValidateOnFocusChange(true);
-
-                {
-                    setLayout(new HorizontalLayout(HorizontalLayout.Alignment.CENTER));
-                    addElements(new HorizontalLayout.Data(0.5), alphaLabel, alphaField);
-                }
-
-                @Override
-                public void loadSettings(CatmullRomSplineInterpolator interpolator) {
-                    alphaField.setValue(interpolator.getAlpha());
-                }
-
-                @Override
-                public CatmullRomSplineInterpolator createInterpolator() {
-                    return new CatmullRomSplineInterpolator(alphaField.getDouble());
-                }
-
-                @Override
-                protected CatmullRomSettingsPanel getThis() {
-                    return this;
-                }
-            }
-
-            public class CubicSettingsPanel extends SettingsPanel<CubicSplineInterpolator, CubicSettingsPanel> {
-
-                @Override
-                public void loadSettings(CubicSplineInterpolator interpolator) {
-                }
-
-                @Override
-                public CubicSplineInterpolator createInterpolator() {
-                    return new CubicSplineInterpolator();
-                }
-
-                @Override
-                protected CubicSettingsPanel getThis() {
-                    return this;
-                }
-            }
-
-            public class LinearSettingsPanel extends SettingsPanel<LinearInterpolator, LinearSettingsPanel> {
-
-                @Override
-                public void loadSettings(LinearInterpolator interpolator) {
-                }
-
-                @Override
-                public LinearInterpolator createInterpolator() {
-                    return new LinearInterpolator();
-                }
-
-                @Override
-                protected LinearSettingsPanel getThis() {
-                    return this;
-                }
-            }
-        }
-    }
+	protected static final Logger logger = LogManager.getLogger();
+	protected final GuiPathing guiPathing;
+	protected final long time;
+	protected final Keyframe keyframe;
+	protected final Path path;
+	public final GuiLabel title = new GuiLabel();
+	public final GuiPanel inputs = new GuiPanel();
+	public final GuiNumberField timeMinField = (GuiNumberField) ((GuiNumberField) newGuiNumberField().setSize(30, 20))
+			.setMinValue(0);
+	public final GuiNumberField timeSecField = (GuiNumberField) ((GuiNumberField) ((GuiNumberField) newGuiNumberField()
+			.setSize(20, 20)).setMinValue(0)).setMaxValue(59);
+	public final GuiNumberField timeMSecField = (GuiNumberField) ((GuiNumberField) ((GuiNumberField) newGuiNumberField()
+			.setSize(30, 20)).setMinValue(0)).setMaxValue(999);
+	public final GuiPanel timePanel;
+	public final GuiButton saveButton;
+	public final GuiButton cancelButton;
+	public final GuiPanel buttons;
+
+	private static GuiNumberField newGuiNumberField() {
+		return (GuiNumberField) ((GuiNumberField) (new GuiNumberField()).setPrecision(0))
+				.setValidateOnFocusChange(true);
+	}
+
+	public GuiEditKeyframe(GuiPathing gui, SPTimeline.SPPath path, long time, String type) {
+		super(ReplayModReplay.instance.getReplayHandler().getOverlay());
+		this.timePanel = (GuiPanel) ((GuiPanel) (new GuiPanel())
+				.setLayout((new HorizontalLayout(HorizontalLayout.Alignment.RIGHT)).setSpacing(3)))
+				.addElements(new HorizontalLayout.Data(0.5D),
+						new GuiElement[] {
+								(new GuiLabel()).setI18nText("replaymod.gui.editkeyframe.timelineposition",
+										new Object[0]),
+								this.timeMinField, (new GuiLabel()).setI18nText("replaymod.gui.minutes", new Object[0]),
+								this.timeSecField, (new GuiLabel()).setI18nText("replaymod.gui.seconds", new Object[0]),
+								this.timeMSecField,
+								(new GuiLabel()).setI18nText("replaymod.gui.milliseconds", new Object[0]) });
+		this.saveButton = (GuiButton) ((GuiButton) (new GuiButton()).setSize(150, 20))
+				.setI18nLabel("replaymod.gui.save", new Object[0]);
+		this.cancelButton = (GuiButton) ((GuiButton) ((GuiButton) (new GuiButton()).onClick(() -> {
+			this.close();
+		})).setSize(150, 20)).setI18nLabel("replaymod.gui.cancel", new Object[0]);
+		this.buttons = (GuiPanel) ((GuiPanel) (new GuiPanel())
+				.setLayout((new HorizontalLayout(HorizontalLayout.Alignment.CENTER)).setSpacing(7)))
+				.addElements(new HorizontalLayout.Data(0.5D), new GuiElement[] { this.saveButton, this.cancelButton });
+		this.setBackgroundColor(Colors.DARK_TRANSPARENT);
+		((GuiPanel) this.popup.setLayout((new VerticalLayout()).setSpacing(10))).addElements(
+				new VerticalLayout.Data(0.5D, false),
+				new GuiElement[] { this.title, this.inputs, this.timePanel, this.buttons });
+		this.guiPathing = gui;
+		this.time = time;
+		this.path = gui.getMod().getCurrentTimeline().getPath(path);
+		this.keyframe = this.path.getKeyframe(time);
+		Consumer<String> updateSaveButtonState = (s) -> {
+			this.saveButton.setEnabled(this.canSave());
+		};
+		((GuiNumberField) this.timeMinField.setValue((double) (time / 1000L / 60L)))
+				.onTextChanged(updateSaveButtonState);
+		((GuiNumberField) this.timeSecField.setValue((double) (time / 1000L % 60L)))
+				.onTextChanged(updateSaveButtonState);
+		((GuiNumberField) this.timeMSecField.setValue((double) (time % 1000L))).onTextChanged(updateSaveButtonState);
+		this.title.setI18nText("replaymod.gui.editkeyframe.title." + type, new Object[0]);
+		this.saveButton.onClick(() -> {
+			Change change = this.save();
+			long newTime = (long) ((this.timeMinField.getInteger() * 60 + this.timeSecField.getInteger()) * 1000
+					+ this.timeMSecField.getInteger());
+			if (newTime != time) {
+				change = CombinedChange.createFromApplied((Change) change,
+						gui.getMod().getCurrentTimeline().moveKeyframe(path, time, newTime));
+				if (gui.getMod().getSelectedPath() == path && gui.getMod().getSelectedTime() == time) {
+					gui.getMod().setSelected(path, newTime);
+				}
+			}
+
+			gui.getMod().getCurrentTimeline().getTimeline().pushChange((Change) change);
+			this.close();
+		});
+	}
+
+	private boolean canSave() {
+		long newTime = (long) ((this.timeMinField.getInteger() * 60 + this.timeSecField.getInteger()) * 1000
+				+ this.timeMSecField.getInteger());
+		if (newTime >= 0L && newTime <= (long) this.guiPathing.timeline.getLength()) {
+			return newTime == this.keyframe.getTime() || this.path.getKeyframe(newTime) == null;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean typeKey(ReadablePoint mousePosition, int keyCode, char keyChar, boolean ctrlDown,
+			boolean shiftDown) {
+		if (keyCode == 256) {
+			this.cancelButton.onClick();
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public void open() {
+		super.open();
+	}
+
+	protected abstract Change save();
+
+	public static class Position extends GuiEditKeyframe<GuiEditKeyframe.Position> {
+		public final GuiNumberField xField = (GuiNumberField) ((GuiNumberField) GuiEditKeyframe.newGuiNumberField()
+				.setSize(60, 20)).setPrecision(5);
+		public final GuiNumberField yField = (GuiNumberField) ((GuiNumberField) GuiEditKeyframe.newGuiNumberField()
+				.setSize(60, 20)).setPrecision(5);
+		public final GuiNumberField zField = (GuiNumberField) ((GuiNumberField) GuiEditKeyframe.newGuiNumberField()
+				.setSize(60, 20)).setPrecision(5);
+		public final GuiNumberField yawField = (GuiNumberField) ((GuiNumberField) GuiEditKeyframe.newGuiNumberField()
+				.setSize(60, 20)).setPrecision(5);
+		public final GuiNumberField pitchField = (GuiNumberField) ((GuiNumberField) GuiEditKeyframe.newGuiNumberField()
+				.setSize(60, 20)).setPrecision(5);
+		public final GuiNumberField rollField = (GuiNumberField) ((GuiNumberField) GuiEditKeyframe.newGuiNumberField()
+				.setSize(60, 20)).setPrecision(5);
+		public final GuiEditKeyframe.Position.InterpolationPanel interpolationPanel = new GuiEditKeyframe.Position.InterpolationPanel();
+
+		public Position(GuiPathing gui, SPTimeline.SPPath path, long keyframe) {
+			super(gui, path, keyframe, "pos");
+			GuiPanel positionInputs = (GuiPanel) ((GuiPanel) (new GuiPanel())
+					.setLayout((new GridLayout()).setCellsEqualSize(false).setColumns(4).setSpacingX(3).setSpacingY(5)))
+					.addElements(new GridLayout.Data(1.0D, 0.5D), new GuiElement[] {
+							(new GuiLabel()).setI18nText("replaymod.gui.editkeyframe.xpos", new Object[0]), this.xField,
+							(new GuiLabel()).setI18nText("replaymod.gui.editkeyframe.camyaw", new Object[0]),
+							this.yawField,
+							(new GuiLabel()).setI18nText("replaymod.gui.editkeyframe.ypos", new Object[0]), this.yField,
+							(new GuiLabel()).setI18nText("replaymod.gui.editkeyframe.campitch", new Object[0]),
+							this.pitchField,
+							(new GuiLabel()).setI18nText("replaymod.gui.editkeyframe.zpos", new Object[0]), this.zField,
+							(new GuiLabel()).setI18nText("replaymod.gui.editkeyframe.camroll", new Object[0]),
+							this.rollField });
+			((GuiPanel) this.inputs.setLayout((new VerticalLayout()).setSpacing(10))).addElements(
+					new VerticalLayout.Data(0.5D, false), new GuiElement[] { positionInputs, this.interpolationPanel });
+			this.keyframe.getValue(CameraProperties.POSITION).ifPresent((pos) -> {
+				this.xField.setValue((Double) pos.getLeft());
+				this.yField.setValue((Double) pos.getMiddle());
+				this.zField.setValue((Double) pos.getRight());
+			});
+			this.keyframe.getValue(CameraProperties.ROTATION).ifPresent((rot) -> {
+				this.yawField.setValue((double) (Float) rot.getLeft());
+				this.pitchField.setValue((double) (Float) rot.getMiddle());
+				this.rollField.setValue((double) (Float) rot.getRight());
+			});
+			Utils.link(this.xField, this.yField, this.zField, this.yawField, this.pitchField, this.rollField,
+					this.timeMinField, this.timeSecField, this.timeMSecField);
+			this.popup.invokeAll(IGuiLabel.class, (e) -> {
+				e.setColor(Colors.BLACK);
+			});
+		}
+
+		protected Change save() {
+			SPTimeline timeline = this.guiPathing.getMod().getCurrentTimeline();
+			Change positionChange = timeline.updatePositionKeyframe(this.time, this.xField.getDouble(),
+					this.yField.getDouble(), this.zField.getDouble(), this.yawField.getFloat(),
+					this.pitchField.getFloat(), this.rollField.getFloat());
+			if (this.interpolationPanel.getSettingsPanel() == null) {
+				return positionChange;
+			} else {
+				Interpolator interpolator = this.interpolationPanel.getSettingsPanel().createInterpolator();
+				return this.interpolationPanel.getInterpolatorType() == InterpolatorType.DEFAULT
+						? CombinedChange.createFromApplied(positionChange, timeline.setInterpolatorToDefault(this.time),
+								timeline.setDefaultInterpolator(interpolator))
+						: CombinedChange.createFromApplied(positionChange,
+								timeline.setInterpolator(this.time, interpolator));
+			}
+		}
+
+		protected GuiEditKeyframe.Position getThis() {
+			return this;
+		}
+
+		public class InterpolationPanel extends AbstractGuiContainer<GuiEditKeyframe.Position.InterpolationPanel> {
+			private GuiEditKeyframe.Position.InterpolationPanel.SettingsPanel settingsPanel;
+			private GuiDropdownMenu<InterpolatorType> dropdown;
+
+			public InterpolationPanel() {
+				this.setLayout(new VerticalLayout());
+				this.dropdown = (GuiDropdownMenu) ((GuiDropdownMenu) ((GuiDropdownMenu) ((GuiDropdownMenu) (new GuiDropdownMenu())
+						.setToString((s) -> {
+							return I18n.get(s.toString(), new Object[0]);
+						})).setValues(InterpolatorType.values())).setHeight(20)).onSelection((i) -> {
+							this.setSettingsPanel((InterpolatorType) this.dropdown.getSelectedValue());
+						});
+				Iterator var2 = this.dropdown.getDropdownEntries().entrySet().iterator();
+
+				while (var2.hasNext()) {
+					Entry<InterpolatorType, IGuiClickable> e = (Entry) var2.next();
+					((IGuiClickable) e.getValue()).setTooltip((new GuiTooltip())
+							.setI18nText(((InterpolatorType) e.getKey()).getI18nDescription(), new Object[0]));
+				}
+
+				GuiPanel dropdownPanel = (GuiPanel) ((GuiPanel) (new GuiPanel()).setLayout(
+						(new GridLayout()).setCellsEqualSize(false).setColumns(2).setSpacingX(3).setSpacingY(5)))
+						.addElements(new GridLayout.Data(1.0D, 0.5D), new GuiElement[] {
+								(new GuiLabel()).setI18nText("replaymod.gui.editkeyframe.interpolator", new Object[0]),
+								this.dropdown });
+				this.addElements(new VerticalLayout.Data(0.5D, false), new GuiElement[] { dropdownPanel });
+				Optional<PathSegment> segment = Position.this.path.getSegments().stream().filter((s) -> {
+					return s.getStartKeyframe() == Position.this.keyframe;
+				}).findFirst();
+				if (segment.isPresent()) {
+					Interpolator interpolator = ((PathSegment) segment.get()).getInterpolator();
+					InterpolatorType type = InterpolatorType.fromClass(interpolator.getClass());
+					if (Position.this.keyframe.getValue(ExplicitInterpolationProperty.PROPERTY).isPresent()) {
+						this.dropdown.setSelected(type);
+					} else {
+						this.setSettingsPanel(InterpolatorType.DEFAULT);
+						type = InterpolatorType.DEFAULT;
+					}
+
+					if (this.getInterpolatorTypeNoDefault(type).getInterpolatorClass().isInstance(interpolator)) {
+						this.settingsPanel.loadSettings(interpolator);
+					}
+				} else {
+					this.dropdown.setDisabled();
+				}
+
+			}
+
+			public GuiEditKeyframe.Position.InterpolationPanel.SettingsPanel getSettingsPanel() {
+				return this.settingsPanel;
+			}
+
+			public void setSettingsPanel(InterpolatorType type) {
+				this.removeElement(this.settingsPanel);
+				switch (this.getInterpolatorTypeNoDefault(type)) {
+				case CATMULL_ROM:
+					this.settingsPanel = new GuiEditKeyframe.Position.InterpolationPanel.CatmullRomSettingsPanel();
+					break;
+				case CUBIC:
+					this.settingsPanel = new GuiEditKeyframe.Position.InterpolationPanel.CubicSettingsPanel();
+					break;
+				case LINEAR:
+					this.settingsPanel = new GuiEditKeyframe.Position.InterpolationPanel.LinearSettingsPanel();
+				}
+
+				this.addElements(new GridLayout.Data(0.5D, 0.5D), new GuiElement[] { this.settingsPanel });
+			}
+
+			protected InterpolatorType getInterpolatorTypeNoDefault(InterpolatorType interpolatorType) {
+				if (interpolatorType != InterpolatorType.DEFAULT && interpolatorType != null) {
+					return interpolatorType;
+				} else {
+					InterpolatorType defaultType = InterpolatorType.fromString((String) Position.this.guiPathing
+							.getMod().getCore().getSettingsRegistry().get(Setting.DEFAULT_INTERPOLATION));
+					return defaultType;
+				}
+			}
+
+			public InterpolatorType getInterpolatorType() {
+				return (InterpolatorType) this.dropdown.getSelectedValue();
+			}
+
+			protected GuiEditKeyframe.Position.InterpolationPanel getThis() {
+				return this;
+			}
+
+			public abstract class SettingsPanel<I extends Interpolator, T extends GuiEditKeyframe.Position.InterpolationPanel.SettingsPanel<I, T>>
+					extends AbstractGuiContainer<T> {
+				public abstract void loadSettings(I interpolator);
+
+				public abstract I createInterpolator();
+			}
+
+			public class CatmullRomSettingsPanel extends
+					GuiEditKeyframe.Position.InterpolationPanel.SettingsPanel<CatmullRomSplineInterpolator, GuiEditKeyframe.Position.InterpolationPanel.CatmullRomSettingsPanel> {
+				public final GuiLabel alphaLabel;
+				public final GuiNumberField alphaField;
+
+				public CatmullRomSettingsPanel() {
+					super();
+					this.alphaLabel = (GuiLabel) ((GuiLabel) (new GuiLabel()).setColor(Colors.BLACK))
+							.setI18nText("replaymod.gui.editkeyframe.interpolator.catmullrom.alpha", new Object[0]);
+					this.alphaField = (GuiNumberField) ((GuiNumberField) ((GuiNumberField) ((GuiNumberField) (new GuiNumberField())
+							.setSize(100, 20)).setPrecision(5)).setMinValue(0)).setValidateOnFocusChange(true);
+					this.setLayout(new HorizontalLayout(HorizontalLayout.Alignment.CENTER));
+					this.addElements(new HorizontalLayout.Data(0.5D),
+							new GuiElement[] { this.alphaLabel, this.alphaField });
+				}
+
+				public void loadSettings(CatmullRomSplineInterpolator interpolator) {
+					this.alphaField.setValue(interpolator.getAlpha());
+				}
+
+				public CatmullRomSplineInterpolator createInterpolator() {
+					return new CatmullRomSplineInterpolator(this.alphaField.getDouble());
+				}
+
+				protected GuiEditKeyframe.Position.InterpolationPanel.CatmullRomSettingsPanel getThis() {
+					return this;
+				}
+			}
+
+			public class CubicSettingsPanel extends
+					GuiEditKeyframe.Position.InterpolationPanel.SettingsPanel<CubicSplineInterpolator, GuiEditKeyframe.Position.InterpolationPanel.CubicSettingsPanel> {
+				public CubicSettingsPanel() {
+					super();
+				}
+
+				public void loadSettings(CubicSplineInterpolator interpolator) {
+				}
+
+				public CubicSplineInterpolator createInterpolator() {
+					return new CubicSplineInterpolator();
+				}
+
+				protected GuiEditKeyframe.Position.InterpolationPanel.CubicSettingsPanel getThis() {
+					return this;
+				}
+			}
+
+			public class LinearSettingsPanel extends
+					GuiEditKeyframe.Position.InterpolationPanel.SettingsPanel<LinearInterpolator, GuiEditKeyframe.Position.InterpolationPanel.LinearSettingsPanel> {
+				public LinearSettingsPanel() {
+					super();
+				}
+
+				public void loadSettings(LinearInterpolator interpolator) {
+				}
+
+				public LinearInterpolator createInterpolator() {
+					return new LinearInterpolator();
+				}
+
+				protected GuiEditKeyframe.Position.InterpolationPanel.LinearSettingsPanel getThis() {
+					return this;
+				}
+			}
+		}
+	}
+
+	public static class Time extends GuiEditKeyframe<GuiEditKeyframe.Time> {
+		public final GuiNumberField timestampMinField = (GuiNumberField) ((GuiNumberField) GuiEditKeyframe
+				.newGuiNumberField().setSize(30, 20)).setMinValue(0);
+		public final GuiNumberField timestampSecField = (GuiNumberField) ((GuiNumberField) ((GuiNumberField) GuiEditKeyframe
+				.newGuiNumberField().setSize(20, 20)).setMinValue(0)).setMaxValue(59);
+		public final GuiNumberField timestampMSecField = (GuiNumberField) ((GuiNumberField) ((GuiNumberField) GuiEditKeyframe
+				.newGuiNumberField().setSize(30, 20)).setMinValue(0)).setMaxValue(999);
+
+		public Time(GuiPathing gui, SPTimeline.SPPath path, long keyframe) {
+			super(gui, path, keyframe, "time");
+			((GuiPanel) this.inputs.setLayout((new HorizontalLayout(HorizontalLayout.Alignment.RIGHT)).setSpacing(3)))
+					.addElements(new HorizontalLayout.Data(0.5D),
+							new GuiElement[] {
+									(new GuiLabel()).setI18nText("replaymod.gui.editkeyframe.timestamp", new Object[0]),
+									this.timestampMinField,
+									(new GuiLabel()).setI18nText("replaymod.gui.minutes", new Object[0]),
+									this.timestampSecField,
+									(new GuiLabel()).setI18nText("replaymod.gui.seconds", new Object[0]),
+									this.timestampMSecField,
+									(new GuiLabel()).setI18nText("replaymod.gui.milliseconds", new Object[0]) });
+			this.keyframe.getValue(TimestampProperty.PROPERTY).ifPresent((time) -> {
+				this.timestampMinField.setValue(time / 1000 / 60);
+				this.timestampSecField.setValue(time / 1000 % 60);
+				this.timestampMSecField.setValue(time % 1000);
+			});
+			Utils.link(this.timestampMinField, this.timestampSecField, this.timestampMSecField, this.timeMinField,
+					this.timeSecField, this.timeMSecField);
+			this.popup.invokeAll(IGuiLabel.class, (e) -> {
+				e.setColor(Colors.BLACK);
+			});
+		}
+
+		protected Change save() {
+			int time = (this.timestampMinField.getInteger() * 60 + this.timestampSecField.getInteger()) * 1000
+					+ this.timestampMSecField.getInteger();
+			return this.guiPathing.getMod().getCurrentTimeline().updateTimeKeyframe(this.keyframe.getTime(), time);
+		}
+
+		protected GuiEditKeyframe.Time getThis() {
+			return this;
+		}
+	}
+
+	public static class Spectator extends GuiEditKeyframe<GuiEditKeyframe.Spectator> {
+		public Spectator(GuiPathing gui, SPTimeline.SPPath path, long keyframe) {
+			super(gui, path, keyframe, "spec");
+			Utils.link(this.timeMinField, this.timeSecField, this.timeMSecField);
+			this.popup.invokeAll(IGuiLabel.class, (e) -> {
+				e.setColor(Colors.BLACK);
+			});
+		}
+
+		protected Change save() {
+			return CombinedChange.createFromApplied();
+		}
+
+		protected GuiEditKeyframe.Spectator getThis() {
+			return this;
+		}
+	}
 }

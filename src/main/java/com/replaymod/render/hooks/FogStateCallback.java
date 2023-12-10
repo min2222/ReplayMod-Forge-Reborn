@@ -1,15 +1,21 @@
 package com.replaymod.render.hooks;
 
-import com.replaymod.gui.utils.Event;
+import java.util.Iterator;
+
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.Event;
 
 public interface FogStateCallback {
-    Event<FogStateCallback> EVENT = Event.create((listeners) ->
-            (enabled) -> {
-                for (FogStateCallback listener : listeners) {
-                    listener.fogStateChanged(enabled);
-                }
-            }
-    );
+	Event<FogStateCallback> EVENT = Event.create((listeners) -> {
+		return (enabled) -> {
+			Iterator var2 = listeners.iterator();
 
-    void fogStateChanged(boolean enabled);
+			while (var2.hasNext()) {
+				FogStateCallback listener = (FogStateCallback) var2.next();
+				listener.fogStateChanged(enabled);
+			}
+
+		};
+	});
+
+	void fogStateChanged(boolean bl);
 }

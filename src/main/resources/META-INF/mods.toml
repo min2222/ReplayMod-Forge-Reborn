@@ -1,29 +1,29 @@
-modLoader="javafml"
-loaderVersion="[43,)"
-issueTrackerURL="https://github.com/ReplayMod/ReplayMod/issues"
-showAsResourcePack=false
-license="GPLv3"
+modLoader = "javafml"
+loaderVersion = "[43,)"
+issueTrackerURL = "https://github.com/ReplayMod/ReplayMod/issues"
+showAsResourcePack = false
+license = "GPLv3"
 [[mods]]
-  modId="replaymod"
-  version="1.0.7"
-  displayName="Replay Mod"
-  updateJSONURL=""
-  displayURL="https://replaymod.com"
-  logoFile="replaymod_logo.png"
-  credits="I'd like to thank my mother and father."
-  authors=["CrushedPixel", "johni0702"]
-  description="A Mod which allows you to record, replay and share your Minecraft experience."
+modId = "replaymod"
+version = "1.0.8"
+displayName = "Replay Mod"
+updateJSONURL = ""
+displayURL = "https://replaymod.com"
+logoFile = "replaymod_logo.png"
+credits = "I'd like to thank my mother and father."
+authors = ["CrushedPixel", "johni0702"]
+description = "A Mod which allows you to record, replay and share your Minecraft experience."
 
-  [[dependencies.replaymod]]
-    modId="forge"
-    mandatory=true
-    versionRange="[43,)"
-    ordering="NONE"
-    side="BOTH"
+[[dependencies.replaymod]]
+modId = "forge"
+mandatory = true
+versionRange = "[43,)"
+ordering = "NONE"
+side = "BOTH"
 
-  [[dependencies.replaymod]]
-    modId="minecraft"
-    mandatory=true
-    versionRange="[1.19.2]"
-    ordering="NONE"
-    side="BOTH"
+[[dependencies.replaymod]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.19.2]"
+ordering = "NONE"
+side = "BOTH"

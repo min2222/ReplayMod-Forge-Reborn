@@ -1,6 +1,7 @@
 package com.replaymod.simplepathing.gui;
 
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.Optional;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -12,10 +13,13 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.replaymod.core.ReplayMod;
 import com.replaymod.core.versions.MCVer;
-import com.replaymod.gui.GuiRenderer;
-import com.replaymod.gui.OffsetGuiRenderer;
-import com.replaymod.gui.element.advanced.AbstractGuiTimeline;
-import com.replaymod.gui.function.Draggable;
+import com.replaymod.lib.de.johni0702.minecraft.gui.GuiRenderer;
+import com.replaymod.lib.de.johni0702.minecraft.gui.element.advanced.AbstractGuiTimeline;
+import com.replaymod.lib.de.johni0702.minecraft.gui.function.Draggable;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.Point;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.ReadablePoint;
+import com.replaymod.lib.de.johni0702.minecraft.gui.utils.lwjgl.vector.Vector2f;
 import com.replaymod.pathing.properties.CameraProperties;
 import com.replaymod.pathing.properties.SpectatorProperty;
 import com.replaymod.pathing.properties.TimestampProperty;
@@ -28,399 +32,318 @@ import com.replaymod.replaystudio.pathing.path.PathSegment;
 import com.replaymod.replaystudio.pathing.property.Property;
 import com.replaymod.simplepathing.ReplayModSimplePathing;
 import com.replaymod.simplepathing.SPTimeline;
-import com.replaymod.simplepathing.SPTimeline.SPPath;
 
-import de.johni0702.minecraft.gui.utils.lwjgl.Point;
-import de.johni0702.minecraft.gui.utils.lwjgl.ReadableDimension;
-import de.johni0702.minecraft.gui.utils.lwjgl.ReadablePoint;
 import net.minecraft.client.renderer.GameRenderer;
 
 public class GuiKeyframeTimeline extends AbstractGuiTimeline<GuiKeyframeTimeline> implements Draggable {
-    protected static final int KEYFRAME_SIZE = 5;
-    protected static final int KEYFRAME_TEXTURE_X = 74;
-    protected static final int KEYFRAME_TEXTURE_Y = 20;
-    private static final int DOUBLE_CLICK_INTERVAL = 250;
-    private static final int DRAGGING_THRESHOLD = KEYFRAME_SIZE;
+	protected static final int KEYFRAME_SIZE = 5;
+	protected static final int KEYFRAME_TEXTURE_X = 74;
+	protected static final int KEYFRAME_TEXTURE_Y = 20;
+	private static final int DOUBLE_CLICK_INTERVAL = 250;
+	private static final int DRAGGING_THRESHOLD = 5;
+	private final GuiPathing gui;
+	private long lastClickedKeyframe;
+	private SPTimeline.SPPath lastClickedPath;
+	private long lastClickedTime;
+	private boolean dragging;
+	private boolean actuallyDragging;
+	private int draggingStartX;
+	private Change draggingChange;
 
-    private final GuiPathing gui;
+	public GuiKeyframeTimeline(GuiPathing gui) {
+		this.gui = gui;
+	}
 
-    /**
-     * The keyframe (time on timeline) that was last clicked on using the left mouse button.
-     */
-    private long lastClickedKeyframe;
+	protected void drawTimelineCursor(GuiRenderer renderer, ReadableDimension size) {
+		ReplayModSimplePathing mod = this.gui.getMod();
+		int width = size.getWidth();
+		int visibleWidth = width - 4 - 4;
+		int startTime = this.getOffset();
+		int visibleTime = (int) (this.getZoom() * (double) this.getLength());
+		int endTime = this.getOffset() + visibleTime;
+		renderer.bindTexture(ReplayMod.TEXTURE);
+		SPTimeline timeline = mod.getCurrentTimeline();
+		timeline.getTimeline().getPaths().stream().flatMap((path) -> {
+			return path.getKeyframes().stream();
+		}).forEach((keyframe) -> {
+			if (keyframe.getTime() >= (long) startTime && keyframe.getTime() <= (long) endTime) {
+				double relativeTime = (double) (keyframe.getTime() - (long) startTime);
+				int positonX = 4 + (int) (relativeTime / (double) visibleTime * (double) visibleWidth) - 2;
+				int u = 74 + (mod.isSelected(keyframe) ? 5 : 0);
+				int v = 20;
+				if (keyframe.getValue(CameraProperties.POSITION).isPresent()) {
+					if (keyframe.getValue(SpectatorProperty.PROPERTY).isPresent()) {
+						v += 10;
+					}
 
-    /**
-     * Path of {@link #lastClickedKeyframe}.
-     */
-    private SPPath lastClickedPath;
+					renderer.drawTexturedRect(positonX, 4, u, v, 5, 5);
+				}
 
-    /**
-     * The time at which {@link #lastClickedKeyframe} was updated.
-     * According to {@link MCVer#milliTime()}.
-     */
-    private long lastClickedTime;
+				Optional<Integer> timeProperty = keyframe.getValue(TimestampProperty.PROPERTY);
+				if (timeProperty.isPresent()) {
+					v += 5;
+					renderer.drawTexturedRect(positonX, 9, u, v, 5, 5);
+					GuiMarkerTimeline replayTimeline = this.gui.overlay.timeline;
+					ReadableDimension replayTimelineSize = replayTimeline.getLastSize();
+					ReadableDimension keyframeTimelineSize = this.getLastSize();
+					if (replayTimelineSize == null || keyframeTimelineSize == null) {
+						return;
+					}
 
-    /**
-     * Whether to handle dragging events.
-     */
-    private boolean dragging;
+					Point replayTimelinePos = new Point(0, 0);
+					Point keyframeTimelinePos = new Point(0, 0);
+					replayTimeline.getContainer().convertFor(replayTimeline, replayTimelinePos);
+					this.getContainer().convertFor(this, keyframeTimelinePos);
+					replayTimelinePos.setLocation(-replayTimelinePos.getX(), -replayTimelinePos.getY());
+					keyframeTimelinePos.setLocation(-keyframeTimelinePos.getX(), -keyframeTimelinePos.getY());
+					int replayTimelineLeft = replayTimelinePos.getX();
+					int replayTimelineRight = replayTimelinePos.getX() + replayTimelineSize.getWidth();
+					int replayTimelineTop = replayTimelinePos.getY();
+					int replayTimelineBottom = replayTimelinePos.getY() + replayTimelineSize.getHeight();
+					int replayTimelineWidth = replayTimelineRight - replayTimelineLeft - 4 - 4;
+					int keyframeTimelineLeft = keyframeTimelinePos.getX();
+					int keyframeTimelineTop = keyframeTimelinePos.getY();
+					float positionXReplayTimeline = 4.0F + (float) (Integer) timeProperty.get()
+							/ (float) replayTimeline.getLength() * (float) replayTimelineWidth;
+					float positionXKeyframeTimeline = (float) positonX + 2.5F;
+					int color = -16776961;
+					Tesselator tessellator = Tesselator.getInstance();
+					BufferBuilder buffer = tessellator.getBuilder();
+					buffer.begin(VertexFormat.Mode.LINE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+					Vector2f p1 = new Vector2f((float) replayTimelineLeft + positionXReplayTimeline,
+							(float) (replayTimelineTop + 4));
+					Vector2f p2 = new Vector2f((float) replayTimelineLeft + positionXReplayTimeline,
+							(float) replayTimelineBottom);
+					Vector2f p3 = new Vector2f((float) keyframeTimelineLeft + positionXKeyframeTimeline,
+							(float) keyframeTimelineTop);
+					Vector2f p4 = new Vector2f((float) keyframeTimelineLeft + positionXKeyframeTimeline,
+							(float) (keyframeTimelineTop + 4));
+					MCVer.emitLine(buffer, p1, p2, -16776961);
+					MCVer.emitLine(buffer, p2, p3, -16776961);
+					MCVer.emitLine(buffer, p3, p4, -16776961);
+					RenderSystem.setShader(GameRenderer::getRendertypeLinesShader);
+					com.replaymod.lib.de.johni0702.minecraft.gui.versions.MCVer.pushScissorState();
+					com.replaymod.lib.de.johni0702.minecraft.gui.versions.MCVer.setScissorDisabled();
+					RenderSystem.lineWidth(2.0F);
+					tessellator.end();
+					com.replaymod.lib.de.johni0702.minecraft.gui.versions.MCVer.popScissorState();
+				}
+			}
 
-    /**
-     * Whether we have surpassed the initial threshold and are actually dragging the keyframe.
-     */
-    private boolean actuallyDragging;
+		});
+		Iterator var10 = timeline.getPositionPath().getSegments().iterator();
 
-    /**
-     * Where the mouse was when {@link #dragging} started.
-     */
-    private int draggingStartX;
+		PathSegment segment;
+		while (var10.hasNext()) {
+			segment = (PathSegment) var10.next();
+			if (segment.getInterpolator() != null
+					&& segment.getInterpolator().getKeyframeProperties().contains(SpectatorProperty.PROPERTY)) {
+				this.drawQuadOnSegment(renderer, visibleWidth, segment, 5, -16742145);
+			}
+		}
 
-    /**
-     * Change caused by dragging. Whenever the user moves the keyframe further, the previous change is undone
-     * and a new one is created. This way when the mouse is released, only one change is in the undo history.
-     */
-    private Change draggingChange;
+		var10 = timeline.getTimePath().getSegments().iterator();
 
-    public GuiKeyframeTimeline(GuiPathing gui) {
-        this.gui = gui;
-    }
+		while (var10.hasNext()) {
+			segment = (PathSegment) var10.next();
+			long startTimestamp = (long) (Integer) segment.getStartKeyframe().getValue(TimestampProperty.PROPERTY)
+					.orElseThrow(IllegalStateException::new);
+			long endTimestamp = (long) (Integer) segment.getEndKeyframe().getValue(TimestampProperty.PROPERTY)
+					.orElseThrow(IllegalStateException::new);
+			if (endTimestamp < startTimestamp) {
+				this.drawQuadOnSegment(renderer, visibleWidth, segment, 10, -65536);
+			}
+		}
 
-    @Override
-    protected void drawTimelineCursor(GuiRenderer renderer, ReadableDimension size) {
-        ReplayModSimplePathing mod = gui.getMod();
+		super.drawTimelineCursor(renderer, size);
+	}
 
-        int width = size.getWidth();
-        int visibleWidth = width - BORDER_LEFT - BORDER_RIGHT;
-        int startTime = getOffset();
-        int visibleTime = (int) (getZoom() * getLength());
-        int endTime = getOffset() + visibleTime;
+	private void drawQuadOnSegment(GuiRenderer renderer, int visibleWidth, PathSegment segment, int y, int color) {
+		int startTime = this.getOffset();
+		int visibleTime = (int) (this.getZoom() * (double) this.getLength());
+		int endTime = this.getOffset() + visibleTime;
+		long startFrameTime = segment.getStartKeyframe().getTime();
+		long endFrameTime = segment.getEndKeyframe().getTime();
+		if (startFrameTime < (long) endTime && endFrameTime > (long) startTime) {
+			double relativeStart = (double) (startFrameTime - (long) startTime);
+			double relativeEnd = (double) (endFrameTime - (long) startTime);
+			int startX = 4 + Math.max(0, (int) (relativeStart / (double) visibleTime * (double) visibleWidth) + 2 + 1);
+			int endX = 4
+					+ Math.min(visibleWidth, (int) (relativeEnd / (double) visibleTime * (double) visibleWidth) - 2);
+			if (startX < endX) {
+				renderer.drawRect(startX + 1, y, endX - startX - 2, 3, color);
+			}
 
-        renderer.bindTexture(ReplayMod.TEXTURE);
+		}
+	}
 
-        SPTimeline timeline = mod.getCurrentTimeline();
+	private Pair<SPTimeline.SPPath, Long> getKeyframe(ReadablePoint position) {
+		int time = this.getTimeAt(position.getX(), position.getY());
+		if (time != -1) {
+			Point mouse = new Point(position);
+			this.getContainer().convertFor(this, mouse);
+			int mouseY = mouse.getY();
+			if (mouseY > 4 && mouseY < 14) {
+				SPTimeline.SPPath path;
+				if (mouseY <= 9) {
+					path = SPTimeline.SPPath.POSITION;
+				} else {
+					path = SPTimeline.SPPath.TIME;
+				}
 
-        timeline.getTimeline().getPaths().stream().flatMap(path -> path.getKeyframes().stream()).forEach(keyframe -> {
-            if (keyframe.getTime() >= startTime && keyframe.getTime() <= endTime) {
-                double relativeTime = keyframe.getTime() - startTime;
-                int positonX = BORDER_LEFT + (int) (relativeTime / visibleTime * visibleWidth) - KEYFRAME_SIZE / 2;
-                int u = KEYFRAME_TEXTURE_X + (mod.isSelected(keyframe) ? KEYFRAME_SIZE : 0);
-                int v = KEYFRAME_TEXTURE_Y;
-                if (keyframe.getValue(CameraProperties.POSITION).isPresent()) {
-                    if (keyframe.getValue(SpectatorProperty.PROPERTY).isPresent()) {
-                        v += 2 * KEYFRAME_SIZE;
-                    }
-                    renderer.drawTexturedRect(positonX, BORDER_TOP, u, v, KEYFRAME_SIZE, KEYFRAME_SIZE);
-                }
-                Optional<Integer> timeProperty = keyframe.getValue(TimestampProperty.PROPERTY);
-                if (timeProperty.isPresent()) {
-                    v += KEYFRAME_SIZE;
-                    renderer.drawTexturedRect(positonX, BORDER_TOP + KEYFRAME_SIZE, u, v, KEYFRAME_SIZE, KEYFRAME_SIZE);
+				int visibleTime = (int) (this.getZoom() * (double) this.getLength());
+				int tolerance = visibleTime * 5 / (this.getLastSize().getWidth() - 4 - 4) / 2;
+				Optional<Keyframe> keyframe = this.gui.getMod().getCurrentTimeline().getPath(path).getKeyframes()
+						.stream().filter((k) -> {
+							return Math.abs(k.getTime() - (long) time) <= (long) tolerance;
+						}).sorted(Comparator.comparing((k) -> {
+							return Math.abs(k.getTime() - (long) time);
+						})).findFirst();
+				return Pair.of(path, (Long) keyframe.map(Keyframe::getTime).orElse(null));
+			}
+		}
 
-                    GuiMarkerTimeline replayTimeline = gui.overlay.timeline;
-                    GuiKeyframeTimeline keyframeTimeline = this;
+		return Pair.of(null, null);
+	}
 
-                    ReadableDimension replayTimelineSize = replayTimeline.getLastSize();
-                    ReadableDimension keyframeTimelineSize = this.getLastSize();
-                    if (replayTimelineSize == null || keyframeTimelineSize == null) {
-                        return;
-                    }
+	public boolean mouseClick(ReadablePoint position, int button) {
+		int time = this.getTimeAt(position.getX(), position.getY());
+		Pair<SPTimeline.SPPath, Long> pathKeyframePair = this.getKeyframe(position);
+		if (pathKeyframePair.getRight() == null) {
+			if (time != -1) {
+				if (button == 0) {
+					this.setCursorPosition(time);
+					this.gui.getMod().setSelected((SPTimeline.SPPath) null, 0L);
+				} else if (button == 1 && pathKeyframePair.getLeft() != null) {
+					Path path = this.gui.getMod().getCurrentTimeline()
+							.getPath((SPTimeline.SPPath) pathKeyframePair.getLeft());
+					path.getKeyframes().stream().flatMap((k) -> {
+						return k.getProperties().stream();
+					}).distinct().forEach((p) -> {
+						this.applyPropertyToGame(p, path, (long) time);
+					});
+				}
 
-                    // Determine absolute positions for both timelines
-                    Point replayTimelinePos = new Point(0, 0);
-                    Point keyframeTimelinePos = new Point(0, 0);
-                    replayTimeline.getContainer().convertFor(replayTimeline, replayTimelinePos);
-                    keyframeTimeline.getContainer().convertFor(keyframeTimeline, keyframeTimelinePos);
-                    replayTimelinePos.setLocation(-replayTimelinePos.getX(), -replayTimelinePos.getY());
-                    keyframeTimelinePos.setLocation(-keyframeTimelinePos.getX(), -keyframeTimelinePos.getY());
+				return true;
+			} else {
+				return false;
+			}
+		} else {
+			SPTimeline.SPPath path = (SPTimeline.SPPath) pathKeyframePair.getLeft();
+			long keyframeTime = (Long) pathKeyframePair.getRight();
+			if (button == 0) {
+				long now = MCVer.milliTime();
+				if (this.lastClickedKeyframe == keyframeTime && now - this.lastClickedTime < 250L) {
+					this.gui.openEditKeyframePopup(path, keyframeTime);
+					return true;
+				}
 
-                    int replayTimelineLeft = replayTimelinePos.getX();
-                    int replayTimelineRight = replayTimelinePos.getX() + replayTimelineSize.getWidth();
-                    int replayTimelineTop = replayTimelinePos.getY();
-                    int replayTimelineBottom = replayTimelinePos.getY() + replayTimelineSize.getHeight();
-                    int replayTimelineWidth = replayTimelineRight - replayTimelineLeft - BORDER_LEFT - BORDER_RIGHT;
+				this.lastClickedTime = now;
+				this.lastClickedKeyframe = keyframeTime;
+				this.lastClickedPath = path;
+				this.gui.getMod().setSelected(this.lastClickedPath, this.lastClickedKeyframe);
+				this.draggingStartX = position.getX();
+				this.dragging = true;
+			} else if (button == 1) {
+				Keyframe keyframe = this.gui.getMod().getCurrentTimeline().getKeyframe(path, keyframeTime);
+				Iterator var9 = keyframe.getProperties().iterator();
 
-                    int keyframeTimelineLeft = keyframeTimelinePos.getX();
-                    int keyframeTimelineTop = keyframeTimelinePos.getY();
+				while (var9.hasNext()) {
+					Property property = (Property) var9.next();
+					this.applyPropertyToGame(property, keyframe);
+				}
+			}
 
-                    float positionXReplayTimeline = BORDER_LEFT + timeProperty.get() / (float) replayTimeline.getLength() * replayTimelineWidth;
-                    float positionXKeyframeTimeline = positonX + KEYFRAME_SIZE / 2f;
+			return true;
+		}
+	}
 
-                    final int color = 0xff0000ff;
-                    Tesselator tessellator = Tesselator.getInstance();
-                    BufferBuilder buffer = tessellator.getBuilder();
-                    buffer.begin(VertexFormat.Mode.LINE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+	private <T> void applyPropertyToGame(Property<T> property, Path path, long time) {
+		Optional<T> value = path.getValue(property, time);
+		if (value.isPresent()) {
+			property.applyToGame(value.get(), ReplayModReplay.instance.getReplayHandler());
+		}
 
-                    // Start just below the top border of the replay timeline
-                    buffer.vertex(
-                            replayTimelineLeft + positionXReplayTimeline,
-                            replayTimelineTop + BORDER_TOP,
-                            0
-                    ).color(
-                            color >> 24 & 0xff,
-                            color >> 16 & 0xff,
-                            color >> 8 & 0xff,
-                            color & 0xff
-                    ).endVertex();
-                    // Draw vertically over the replay timeline, including its bottom border
-                    buffer.vertex(
-                            replayTimelineLeft + positionXReplayTimeline,
-                            replayTimelineBottom,
-                            0
-                    ).color(
-                            color >> 24 & 0xff,
-                            color >> 16 & 0xff,
-                            color >> 8 & 0xff,
-                            color & 0xff
-                    ).endVertex();
-                    // Now for the important part: connecting to the keyframe timeline
-                    buffer.vertex(
-                            keyframeTimelineLeft + positionXKeyframeTimeline,
-                            keyframeTimelineTop,
-                            0
-                    ).color(
-                            color >> 24 & 0xff,
-                            color >> 16 & 0xff,
-                            color >> 8 & 0xff,
-                            color & 0xff
-                    ).endVertex();
-                    // And finally another vertical bit (the timeline is already crammed enough, so only the border)
-                    buffer.vertex(
-                            keyframeTimelineLeft + positionXKeyframeTimeline,
-                            keyframeTimelineTop + BORDER_TOP,
-                            0
-                    ).color(
-                            color >> 24 & 0xff,
-                            color >> 16 & 0xff,
-                            color >> 8 & 0xff,
-                            color & 0xff
-                    ).endVertex();
-                    
-                    RenderSystem.setShader(GameRenderer::getRendertypeLinesShader);
-                    OffsetGuiRenderer.pushScissorState();
-                    OffsetGuiRenderer.setScissorDisabled();
-                    RenderSystem.lineWidth(2.0F);
-                    tessellator.end();
-                    OffsetGuiRenderer.popScissorState();
-                }
-            }
-        });
+	}
 
-        // Draw colored quads on spectator path segments
-        for (PathSegment segment : timeline.getPositionPath().getSegments()) {
-            if (segment.getInterpolator() == null
-                    || !segment.getInterpolator().getKeyframeProperties().contains(SpectatorProperty.PROPERTY)) {
-                continue; // Not a spectator segment
-            }
-            drawQuadOnSegment(renderer, visibleWidth, segment, BORDER_TOP + 1, 0xFF0088FF);
-        }
+	private <T> void applyPropertyToGame(Property<T> property, Keyframe keyframe) {
+		Optional<T> value = keyframe.getValue(property);
+		if (value.isPresent()) {
+			property.applyToGame(value.get(), ReplayModReplay.instance.getReplayHandler());
+		}
 
-        // Draw red quads on time path segments that would require time going backwards
-        for (PathSegment segment : timeline.getTimePath().getSegments()) {
-            long startTimestamp = segment.getStartKeyframe().getValue(TimestampProperty.PROPERTY).orElseThrow(IllegalStateException::new);
-            long endTimestamp = segment.getEndKeyframe().getValue(TimestampProperty.PROPERTY).orElseThrow(IllegalStateException::new);
-            if (endTimestamp >= startTimestamp) {
-                continue; // All is fine, time is not moving backwards
-            }
-            drawQuadOnSegment(renderer, visibleWidth, segment, BORDER_TOP + KEYFRAME_SIZE + 1, 0xFFFF0000);
-        }
+	}
 
-        super.drawTimelineCursor(renderer, size);
-    }
+	public boolean mouseDrag(ReadablePoint position, int button, long timeSinceLastCall) {
+		if (!this.dragging) {
+			if (button == 0) {
+				int time = this.getTimeAt(position.getX(), position.getY());
+				if (time != -1) {
+					this.setCursorPosition(time);
+					return true;
+				}
+			}
 
-    private void drawQuadOnSegment(GuiRenderer renderer, int visibleWidth, PathSegment segment, int y, int color) {
-        int startTime = getOffset();
-        int visibleTime = (int) (getZoom() * getLength());
-        int endTime = getOffset() + visibleTime;
+			return false;
+		} else {
+			if (!this.actuallyDragging && Math.abs(position.getX() - this.draggingStartX) >= 5) {
+				this.actuallyDragging = true;
+			}
 
-        long startFrameTime = segment.getStartKeyframe().getTime();
-        long endFrameTime = segment.getEndKeyframe().getTime();
-        if (startFrameTime >= endTime || endFrameTime <= startTime) {
-            return; // Segment out of display range
-        }
+			if (this.actuallyDragging) {
+				if (!this.gui.loadEntityTracker(() -> {
+					this.mouseDrag(position, button, timeSinceLastCall);
+				})) {
+					return true;
+				}
 
-        double relativeStart = startFrameTime - startTime;
-        double relativeEnd = endFrameTime - startTime;
-        int startX = BORDER_LEFT + Math.max(0, (int) (relativeStart / visibleTime * visibleWidth) + KEYFRAME_SIZE / 2 + 1);
-        int endX = BORDER_LEFT + Math.min(visibleWidth, (int) (relativeEnd / visibleTime * visibleWidth) - KEYFRAME_SIZE / 2);
-        if (startX < endX) {
-            renderer.drawRect(startX + 1, y, endX - startX - 2, KEYFRAME_SIZE - 2, color);
-        }
-    }
+				SPTimeline timeline = this.gui.getMod().getCurrentTimeline();
+				Point mouse = new Point(position);
+				this.getContainer().convertFor(this, mouse);
+				int mouseX = mouse.getX();
+				int width = this.getLastSize().getWidth();
+				int bodyWidth = width - 4 - 4;
+				double segmentLength = (double) this.getLength() * this.getZoom();
+				double segmentTime = segmentLength * (double) (mouseX - 4) / (double) bodyWidth;
+				int newTime = Math.min(Math.max((int) Math.round((double) this.getOffset() + segmentTime), 0),
+						this.getLength());
+				if (newTime < 0) {
+					return true;
+				}
 
-    /**
-     * Returns the keyframe at the specified position.
-     *
-     * @param position The raw position
-     * @return Pair of path id and keyframe or null when no keyframe was clicked
-     */
-    private Pair<SPPath, Long> getKeyframe(ReadablePoint position) {
-        int time = getTimeAt(position.getX(), position.getY());
-        if (time != -1) {
-            Point mouse = new Point(position);
-            getContainer().convertFor(this, mouse);
-            int mouseY = mouse.getY();
-            if (mouseY > BORDER_TOP && mouseY < BORDER_TOP + 2 * KEYFRAME_SIZE) {
-                SPPath path;
-                if (mouseY <= BORDER_TOP + KEYFRAME_SIZE) {
-                    // Position keyframe
-                    path = SPPath.POSITION;
-                } else {
-                    // Time keyframe
-                    path = SPPath.TIME;
-                }
-                int visibleTime = (int) (getZoom() * getLength());
-                int tolerance = visibleTime * KEYFRAME_SIZE / (getLastSize().getWidth() - BORDER_LEFT - BORDER_RIGHT) / 2;
-                Optional<Keyframe> keyframe = gui.getMod().getCurrentTimeline().getPath(path).getKeyframes().stream()
-                        .filter(k -> Math.abs(k.getTime() - time) <= tolerance)
-                        .sorted(Comparator.comparing(k -> Math.abs(k.getTime() - time)))
-                        .findFirst();
-                return Pair.of(path, keyframe.map(Keyframe::getTime).orElse(null));
-            }
-        }
-        return Pair.of(null, null);
-    }
+				while (timeline.getKeyframe(this.lastClickedPath, (long) newTime) != null) {
+					++newTime;
+				}
 
-    @Override
-    public boolean mouseClick(ReadablePoint position, int button) {
-        int time = getTimeAt(position.getX(), position.getY());
-        Pair<SPPath, Long> pathKeyframePair = getKeyframe(position);
-        if (pathKeyframePair.getRight() != null) {
-            SPPath path = pathKeyframePair.getLeft();
-            // Clicked on keyframe
-            long keyframeTime = pathKeyframePair.getRight();
-            if (button == 0) { // Left click
-                long now = MCVer.milliTime();
-                if (lastClickedKeyframe == keyframeTime) {
-                    // Clicked the same keyframe again, potentially a double click
-                    if (now - lastClickedTime < DOUBLE_CLICK_INTERVAL) {
-                        // Yup, double click, open the edit keyframe gui
-                        gui.openEditKeyframePopup(path, keyframeTime);
-                        return true;
-                    }
-                }
-                // Not a double click, just update the click time and selection
-                lastClickedTime = now;
-                lastClickedKeyframe = keyframeTime;
-                lastClickedPath = path;
-                gui.getMod().setSelected(lastClickedPath, lastClickedKeyframe);
-                // We might be dragging
-                draggingStartX = position.getX();
-                dragging = true;
-            } else if (button == 1) { // Right click
-                Keyframe keyframe = gui.getMod().getCurrentTimeline().getKeyframe(path, keyframeTime);
-                for (Property property : keyframe.getProperties()) {
-                    applyPropertyToGame(property, keyframe);
-                }
-            }
-            return true;
-        } else if (time != -1) {
-            // Clicked on timeline but not on any keyframe
-            if (button == 0) { // Left click
-                setCursorPosition(time);
-                gui.getMod().setSelected(null, 0);
-            } else if (button == 1) { // Right click
-                if (pathKeyframePair.getLeft() != null) {
-                    // Apply the value of the clicked path at the clicked position
-                    Path path = gui.getMod().getCurrentTimeline().getPath(pathKeyframePair.getLeft());
-                    path.getKeyframes().stream().flatMap(k -> k.getProperties().stream()).distinct().forEach(
-                            p -> applyPropertyToGame(p, path, time));
-                }
-            }
-            return true;
-        }
-        // Missed timeline
-        return false;
-    }
+				if (this.draggingChange != null) {
+					this.draggingChange.undo(timeline.getTimeline());
+				}
 
-    // Helper method because generics cannot be defined on blocks
-    private <T> void applyPropertyToGame(Property<T> property, Path path, long time) {
-        Optional<T> value = path.getValue(property, time);
-        if (value.isPresent()) {
-            property.applyToGame(value.get(), ReplayModReplay.instance.getReplayHandler());
-        }
-    }
+				this.draggingChange = timeline.moveKeyframe(this.lastClickedPath, this.lastClickedKeyframe,
+						(long) newTime);
+				this.gui.getMod().setSelected(this.lastClickedPath, (long) newTime);
+			}
 
-    // Helper method because generics cannot be defined on blocks
-    private <T> void applyPropertyToGame(Property<T> property, Keyframe keyframe) {
-        Optional<T> value = keyframe.getValue(property);
-        if (value.isPresent()) {
-            property.applyToGame(value.get(), ReplayModReplay.instance.getReplayHandler());
-        }
-    }
+			return true;
+		}
+	}
 
-    @Override
-    public boolean mouseDrag(ReadablePoint position, int button, long timeSinceLastCall) {
-        if (!dragging) {
-            if (button == 0) {
-                // Left click, the user might try to move the cursor by clicking and holding
-                int time = getTimeAt(position.getX(), position.getY());
-                if (time != -1) {
-                    // and they are still on the timeline, so update the time appropriately
-                    setCursorPosition(time);
-                    return true;
-                }
-            }
-            return false;
-        }
+	public boolean mouseRelease(ReadablePoint position, int button) {
+		if (this.dragging) {
+			if (this.actuallyDragging) {
+				this.gui.getMod().getCurrentTimeline().getTimeline().pushChange(this.draggingChange);
+				this.draggingChange = null;
+				this.actuallyDragging = false;
+			}
 
-        if (!actuallyDragging) {
-            // Check if threshold has been passed by now
-            if (Math.abs(position.getX() - draggingStartX) >= DRAGGING_THRESHOLD) {
-                actuallyDragging = true;
-            }
-        }
-        if (actuallyDragging) {
-            if (!gui.loadEntityTracker(() -> mouseDrag(position, button, timeSinceLastCall))) return true;
-            // Threshold passed
-            SPTimeline timeline = gui.getMod().getCurrentTimeline();
-            Point mouse = new Point(position);
-            getContainer().convertFor(this, mouse);
-            int mouseX = mouse.getX();
-            int width = getLastSize().getWidth();
-            int bodyWidth = width - BORDER_LEFT - BORDER_RIGHT;
-            double segmentLength = getLength() * getZoom();
-            double segmentTime = segmentLength * (mouseX - BORDER_LEFT) / bodyWidth;
-            int newTime = Math.min(Math.max((int) Math.round(getOffset() + segmentTime), 0), getLength());
-            if (newTime < 0) {
-                return true;
-            }
+			this.dragging = false;
+			return true;
+		} else {
+			return false;
+		}
+	}
 
-            // If there already is a keyframe at the target time, then increase the time by one until there is none
-            while (timeline.getKeyframe(lastClickedPath, newTime) != null) {
-                newTime++;
-            }
-
-            // First undo any previous changes
-            if (draggingChange != null) {
-                draggingChange.undo(timeline.getTimeline());
-            }
-
-            // Move keyframe to new position and
-            // store change for later undoing / pushing to history
-            draggingChange = timeline.moveKeyframe(lastClickedPath, lastClickedKeyframe, newTime);
-
-            // Selected keyframe has been replaced
-            gui.getMod().setSelected(lastClickedPath, newTime);
-        }
-        return true;
-    }
-
-    @Override
-    public boolean mouseRelease(ReadablePoint position, int button) {
-        if (dragging) {
-            if (actuallyDragging) {
-                gui.getMod().getCurrentTimeline().getTimeline().pushChange(draggingChange);
-                draggingChange = null;
-                actuallyDragging = false;
-            }
-            dragging = false;
-            return true;
-        }
-        return false;
-    }
-
-    @Override
-    protected GuiKeyframeTimeline getThis() {
-        return this;
-    }
+	protected GuiKeyframeTimeline getThis() {
+		return this;
+	}
 }
